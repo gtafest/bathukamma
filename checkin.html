@@ -150,6 +150,32 @@
     cursor: pointer;
   }
 
+  /* Find by name (voice or typing) */
+  .name-search { padding: 14px 16px; border-top: 1px solid var(--border); background: var(--card); }
+  .name-search .ns-title { font-size: 13px; font-weight: 700; color: var(--primary-dark); margin: 0 0 8px; }
+  .name-search .ns-row { display: flex; gap: 8px; }
+  .name-search input {
+    flex: 1; min-width: 0; padding: 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 16px; font-family: inherit;
+  }
+  #micBtn {
+    flex-shrink: 0; padding: 12px 16px; border: none; border-radius: 6px;
+    background: var(--primary); color: white; font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+  #micBtn.listening { background: #ea580c; animation: mic-pulse 1.1s ease-in-out infinite; }
+  #micBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+  @keyframes mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(234,88,12,0.5); } 50% { box-shadow: 0 0 0 10px rgba(234,88,12,0); } }
+  .ns-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; min-height: 16px; }
+  .ns-results { margin-top: 8px; }
+  .ns-result {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; text-align: left; padding: 12px; margin-top: 6px;
+    background: white; border: 1px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: 15px; cursor: pointer; color: var(--text);
+  }
+  .ns-result:hover { border-color: var(--primary); background: #fff8ec; }
+  .ns-result .ns-detail { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
   /* Volunteer card */
   .volunteer-card {
     border-left: 6px solid var(--info);
@@ -266,6 +292,16 @@
     <!-- Scanner -->
     <div class="card" id="scannerCard">
       <div id="qr-reader"></div>
+      <!-- Find by NAME — for volunteers without their QR code handy -->
+      <div class="name-search">
+        <p class="ns-title">No QR code? Find the volunteer by name</p>
+        <div class="ns-row">
+          <button type="button" id="micBtn" onclick="toggleVoiceSearch()">🎤 Say name</button>
+          <input type="text" id="nameQuery" placeholder="…or type a name" autocomplete="off" autocapitalize="words" enterkeyhint="search" />
+        </div>
+        <p class="ns-hint" id="nsHint"></p>
+        <div class="ns-results" id="nsResults"></div>
+      </div>
       <div class="manual-entry">
         <input type="text" id="manualToken" placeholder="Or type token (e.g., CHK-A1B2…)" autocomplete="off" />
         <button onclick="lookupManual()">Look up</button>
@@ -342,7 +378,9 @@
     document.getElementById('appContent').style.display = 'block';
     document.getElementById('adminMeta').textContent = '👤 ' + adminName;
     document.getElementById('adminFooter').textContent = adminName;
-    initScanner();
+    // If the camera/QR library fails to load, name search and typed tokens must still work
+    try { initScanner(); } catch (e) { console.error('QR scanner failed to start:', e); flash('Camera scanner unavailable — use name search or type the token.', 'warning'); }
+    initNameSearch();
     // If admin arrived via a QR-scanned URL with ?token=..., auto-look up immediately
     if (pendingToken) {
       const tok = pendingToken;
@@ -469,6 +507,216 @@
 
   function onScanError() { /* per-frame errors are noisy; ignore */ }
 
+  /* ============================================================
+     FIND BY NAME — voice or typing
+     --------------------------------------------------------------
+     The roster (name, short detail, status, token) is loaded once
+     after unlock and kept IN MEMORY only, so matching is instant
+     even with a queue at the desk. It refreshes every 60 seconds
+     and whenever a search finds nothing (to pick up walk-in
+     registrations made a moment ago).
+     A match never checks anyone in by itself: it opens the same
+     volunteer card as a QR scan, and the admin taps Check IN/OUT.
+     ============================================================ */
+  let roster = [];
+  let rosterLoadedAt = 0;
+  let rosterLoading = null;
+  let recognition = null;
+  let listening = false;
+
+  function initNameSearch() {
+    const input = document.getElementById('nameQuery');
+    let t = null;
+    input.addEventListener('input', function() {
+      clearTimeout(t);
+      t = setTimeout(function() { runNameSearch([input.value], false); }, 180);
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); runNameSearch([input.value], true); }
+    });
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      const mic = document.getElementById('micBtn');
+      mic.disabled = true;
+      mic.textContent = '🎤 Not supported';
+      setHint('Voice search needs Chrome, Edge or Safari. Typing the name works everywhere.');
+    }
+    loadRoster();
+    setInterval(function() { if (currentPin) loadRoster(); }, 60000);
+  }
+
+  function setHint(msg) { document.getElementById('nsHint').textContent = msg || ''; }
+
+  function loadRoster() {
+    if (rosterLoading) return rosterLoading;
+    rosterLoading = callBackend('listRoster', { adminPin: currentPin })
+      .then(function(res) {
+        if (res && res.status === 'ok' && Array.isArray(res.roster)) {
+          roster = res.roster.map(function(v) {
+            v._first = normName(v.firstName);
+            v._last = normName(v.lastName);
+            return v;
+          });
+          rosterLoadedAt = Date.now();
+        } else if (res && /unknown|invalid request|Cannot read/i.test(String(res.message || ''))) {
+          setHint('Name search needs the latest backend — deploy a new Apps Script version.');
+        }
+      })
+      .catch(function() { /* keep the previous roster; QR scanning still works */ })
+      .then(function() { rosterLoading = null; });
+    return rosterLoading;
+  }
+
+  // Lower-case, letters only, and smooth over the spellings speech-to-text
+  // commonly produces for Indian names (Sri/Shree, Laxmi/Lakshmi, Reddy/Reddi…).
+  function normName(str) {
+    return String(str || '').toLowerCase()
+      .replace(/[^a-z ]+/g, ' ')
+      .replace(/ksh|x/g, 'ks').replace(/ph/g, 'f').replace(/[sc]h/g, 's')
+      .replace(/([tdbgkj])h/g, '$1').replace(/w/g, 'v').replace(/y\b/g, 'i')
+      .replace(/ee|ea/g, 'i').replace(/oo|ou/g, 'u').replace(/aa/g, 'a')
+      .replace(/(.)\1+/g, '$1')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  function editDistance(a, b) {
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    let prev = [], cur = [];
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+      cur = [i];
+      for (let j = 1; j <= n; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  // 0..1 — how well one spoken/typed word matches one name word
+  function wordScore(q, w) {
+    if (!q || !w) return 0;
+    if (q === w) return 1;
+    if (w.indexOf(q) === 0 && q.length >= 2) return 0.9;              // still typing: "sai" → "saikiran"
+    const sim = 1 - editDistance(q, w) / Math.max(q.length, w.length);
+    return sim;
+  }
+
+  // Score one volunteer against one phrase ("ravi kumar")
+  function scoreVolunteer(v, phrase) {
+    const qWords = phrase.split(' ').filter(String);
+    if (!qWords.length) return 0;
+    const nameWords = (v._first + ' ' + v._last).split(' ').filter(String);
+    const joined = nameWords.join('');
+    let total = 0;
+    qWords.forEach(function(q) {
+      let best = 0;
+      nameWords.forEach(function(w) { best = Math.max(best, wordScore(q, w)); });
+      total += best;
+    });
+    let score = total / qWords.length;
+    // "sai kiran" spoken as two words for a first name stored as "Saikiran" (and vice versa)
+    score = Math.max(score, wordScore(qWords.join(''), joined), wordScore(qWords.join(''), nameWords[0] || ''));
+    // Saying both names and matching both is stronger evidence than one name
+    if (qWords.length >= 2 && score > 0.75) score += 0.05;
+    return score;
+  }
+
+  function searchRoster(phrases) {
+    const norm = phrases.map(normName).filter(function(p) { return p.length >= 2; });
+    if (!norm.length) return [];
+    const out = [];
+    roster.forEach(function(v) {
+      let best = 0;
+      norm.forEach(function(p) { best = Math.max(best, scoreVolunteer(v, p)); });
+      if (best >= 0.62) out.push({ v: v, score: best });
+    });
+    out.sort(function(a, b) { return b.score - a.score; });
+    return out.slice(0, 8);
+  }
+
+  // autoOpen: open the volunteer card straight away when there is ONE clear match
+  async function runNameSearch(phrases, autoOpen) {
+    const box = document.getElementById('nsResults');
+    const shown = String(phrases[0] || '').trim();
+    if (shown.length < 2) { box.innerHTML = ''; setHint(''); return; }
+    let matches = searchRoster(phrases);
+    if (!matches.length && Date.now() - rosterLoadedAt > 5000) {
+      setHint('Checking for new registrations…');
+      await loadRoster();
+      matches = searchRoster(phrases);
+    }
+    if (!matches.length) {
+      box.innerHTML = '';
+      setHint('No volunteer found for "' + shown + '". Try the last name, type it, or scan the QR code.');
+      return;
+    }
+    const clear = matches[0].score >= 0.85 && (matches.length === 1 || matches[0].score - matches[1].score >= 0.12);
+    if (autoOpen && clear) {
+      pickVolunteer(matches[0].v.token);
+      return;
+    }
+    setHint(matches.length === 1 ? 'Tap the name to open.' : matches.length + ' possible matches — tap the right one.');
+    const label = { pending: 'Not checked in', 'in': 'Checked in', out: 'Checked out' };
+    const cls = { pending: 'badge-info', 'in': 'badge-warning', out: 'badge-success' };
+    box.innerHTML = matches.map(function(m) {
+      const v = m.v;
+      return '<button type="button" class="ns-result" data-token="' + escapeHtml(v.token) + '">' +
+        '<span><strong>' + escapeHtml((v.firstName + ' ' + v.lastName).trim()) + '</strong>' +
+        '<span class="ns-detail">' + escapeHtml(v.detail || '') + '</span></span>' +
+        '<span class="badge ' + cls[v.state] + '">' + label[v.state] + '</span></button>';
+    }).join('');
+    box.querySelectorAll('.ns-result').forEach(function(b) {
+      b.addEventListener('click', function() { pickVolunteer(b.getAttribute('data-token')); });
+    });
+  }
+
+  function pickVolunteer(token) {
+    document.getElementById('nsResults').innerHTML = '';
+    document.getElementById('nameQuery').value = '';
+    setHint('');
+    lookupAndShow(token).then(function() {
+      try { document.getElementById('volunteerArea').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+    });
+  }
+
+  function toggleVoiceSearch() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const mic = document.getElementById('micBtn');
+    if (listening && recognition) { try { recognition.stop(); } catch (e) {} return; }
+    recognition = new SR();
+    recognition.lang = 'en-IN';            // Indian English handles Telugu names best
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 5;       // every guess is tried against the roster
+    recognition.onstart = function() {
+      listening = true; mic.classList.add('listening'); mic.textContent = '🔴 Listening…';
+      setHint('Say the volunteer\'s first and last name.');
+    };
+    recognition.onresult = function(e) {
+      const alts = [];
+      for (let i = 0; i < e.results[0].length; i++) alts.push(e.results[0][i].transcript);
+      document.getElementById('nameQuery').value = alts[0] || '';
+      runNameSearch(alts, true);
+    };
+    recognition.onerror = function(e) {
+      const msgs = {
+        'not-allowed': 'Microphone is blocked. Allow mic access for this site, or type the name.',
+        'service-not-allowed': 'Microphone is blocked. Allow mic access for this site, or type the name.',
+        'no-speech': 'Didn\'t hear anything — tap 🎤 and try again, closer to the phone.',
+        'audio-capture': 'No microphone found. Type the name instead.',
+        'network': 'Voice search needs an internet connection. Type the name instead.'
+      };
+      setHint(msgs[e.error] || 'Voice search failed (' + e.error + '). Type the name instead.');
+    };
+    recognition.onend = function() {
+      listening = false; mic.classList.remove('listening'); mic.textContent = '🎤 Say name';
+    };
+    try { recognition.start(); } catch (err) { setHint('Could not start the microphone. Type the name instead.'); }
+  }
+
   // ---- Manual fallback ----
   async function lookupManual() {
     const token = (document.getElementById('manualToken').value || '').trim().toUpperCase();
@@ -535,7 +783,7 @@
       actionBtns = '<button class="btn-primary" id="confirmBtn" onclick="confirmCheckIn(\'' + token + '\', \'out\')" style="background:#ea580c">← Check OUT now</button>' +
                    '<button class="btn-secondary" onclick="clearVolunteer()">Cancel</button>';
     } else {
-      actionBtns = '<button class="btn-secondary" onclick="clearVolunteer()">✓ Done — scan next</button>';
+      actionBtns = '<button class="btn-secondary" onclick="clearVolunteer()">✓ Done — next volunteer</button>';
     }
 
     area.innerHTML = `
@@ -586,6 +834,7 @@
         return;
       }
       const name = (res.firstName + ' ' + res.lastName).trim();
+      roster.forEach(function(v) { if (v.token === token) v.state = (mode === 'out') ? 'out' : 'in'; });
 
       if (mode === 'in') {
         if (res.alreadyCheckedIn) {

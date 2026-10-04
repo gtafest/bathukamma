@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <title>Global Telangana Association — GTA International Fest Volunteer Form</title>
+  <title>GTA Bathukamma 2026 — Volunteer Sign-up</title>
 
   <!-- jsPDF for client-side PDF report generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -71,7 +71,7 @@
       background-size: 28px 12px;
       background-repeat: repeat-x;
     }
-    /* International mela ornament — globe, diyas, bunting */
+    /* Festival ornament (legacy, unused) */
     .fest-ornament {
       display: block;
       margin: 0 auto 8px;
@@ -121,10 +121,26 @@
       position: relative;
       box-shadow: 0 6px 20px rgba(193, 39, 45, 0.28);
     }
+    .banner-subtitle .event-name {
+      margin: 0 0 6px;
+      font-size: 34px;
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #ffffff;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .banner-subtitle .event-when {
+      margin: 6px 0 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff7e0;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+    }
     .banner-subtitle .reg-tagline {
       margin: 0;
-      font-size: 18px;
-      letter-spacing: 5px;
+      font-size: 15px;
+      letter-spacing: 4px;
       color: #ffffff;
       font-weight: 700;
       text-shadow: 0 2px 4px rgba(0,0,0,0.35);
@@ -139,7 +155,9 @@
       background-repeat: repeat-x;
     }
     @media (max-width: 480px) {
-      .banner-subtitle .reg-tagline { font-size: 14px; letter-spacing: 3px; }
+      .banner-subtitle .event-name { font-size: 26px; }
+      .banner-subtitle .reg-tagline { font-size: 12px; letter-spacing: 3px; }
+      .banner-subtitle .event-when { font-size: 13px; }
       .banner-subtitle { padding: 12px 12px 20px; }
     }
 
@@ -535,6 +553,21 @@
       align-items: center;
       gap: 6px;
     }
+
+    /* ============ SIMPLE FORM (one card, one column, big tap targets) ============ */
+    .simple-form-card { border-top: 8px solid var(--fest-red); padding: 22px 20px; }
+    .simple-form-card .form-intro { margin: 0 0 18px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+    .simple-form-card .field { margin-bottom: 18px; }
+    .simple-form-card label { font-size: 15px; }
+    .simple-form-card input:not([type="checkbox"]):not([type="radio"]),
+    .simple-form-card select { padding: 13px 12px; font-size: 16px; }
+    .choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .choice-row .toggle-radio { justify-content: center; padding: 13px 10px; font-weight: 600; }
+    .choice-row .toggle-radio:has(input:checked) { border-color: var(--fest-red); background: #fff8ec; }
+    .privacy-mini { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
+    .privacy-mini summary { cursor: pointer; color: var(--fest-red); font-weight: 600; }
+    .privacy-mini ul { margin: 8px 0 0; padding-left: 20px; }
+    .privacy-mini li { margin-bottom: 4px; }
 
     /* ============ STUDENT-VOLUNTEER TOGGLE ============ */
     .student-toggle-card {
@@ -957,92 +990,10 @@
     <!-- Official GTA Atlanta banner image (save the GTA banner as gta-banner.png in this folder) -->
     <img src="gta-banner.png" alt="Global Telangana Association — Atlanta" class="gta-banner-img" />
     <div class="banner-subtitle">
-      <p class="reg-tagline">✦ &nbsp;VOLUNTEER REGISTRATION&nbsp; ✦</p>
+      <p class="event-name">Bathukamma 2026</p>
+      <p class="reg-tagline">✦ &nbsp;VOLUNTEER SIGN-UP&nbsp; ✦</p>
+      <p class="event-when">Saturday, October 17 &middot; 11 AM – 10 PM EST<br>Denmark High School</p>
     </div>
-    <!-- Hidden — kept temporarily so existing CSS selectors don't break; will be removed when scripts no longer reference it -->
-    <svg class="fest-ornament" viewBox="0 0 160 110" xmlns="http://www.w3.org/2000/svg" aria-label="International festival ornament" role="img" style="display:none;">
-      <!-- Bunting string arcing across the top -->
-      <path d="M6 16 Q80 4 154 16" stroke="#d4a437" stroke-width="0.8" fill="none"/>
-
-      <!-- Triangular flags (international colors) hanging from the bunting -->
-      <g stroke="#7a0c16" stroke-width="0.3">
-        <path d="M14 16 L18 26 L22 16 Z" fill="#c1272d"/>
-        <path d="M26 15 L30 25 L34 15 Z" fill="#f9b233"/>
-        <path d="M38 14 L42 24 L46 14 Z" fill="#198754"/>
-        <path d="M50 13 L54 23 L58 13 Z" fill="#b53075"/>
-        <path d="M62 12 L66 22 L70 12 Z" fill="#ff6b35"/>
-        <path d="M74 12 L78 22 L82 12 Z" fill="#185fa5"/>
-        <path d="M86 12 L90 22 L94 12 Z" fill="#198754"/>
-        <path d="M98 13 L102 23 L106 13 Z" fill="#b53075"/>
-        <path d="M110 14 L114 24 L118 14 Z" fill="#f9b233"/>
-        <path d="M122 15 L126 25 L130 15 Z" fill="#c1272d"/>
-        <path d="M134 16 L138 26 L142 16 Z" fill="#ff6b35"/>
-      </g>
-
-      <!-- Sparkles around the scene -->
-      <g fill="#ffd166" opacity="0.85">
-        <circle cx="36" cy="38" r="1.1"/>
-        <circle cx="124" cy="36" r="1.1"/>
-        <circle cx="48" cy="58" r="0.9"/>
-        <circle cx="114" cy="60" r="0.9"/>
-        <circle cx="22" cy="50" r="0.8"/>
-        <circle cx="138" cy="48" r="0.8"/>
-      </g>
-
-      <!-- Central globe — the "international" element -->
-      <!-- Outer halo ring -->
-      <circle cx="80" cy="58" r="22" fill="none" stroke="#d4a437" stroke-width="0.6" opacity="0.6"/>
-      <!-- Globe sphere -->
-      <circle cx="80" cy="58" r="20" fill="#185fa5"/>
-      <!-- Continent shapes (stylized) -->
-      <g fill="#198754">
-        <path d="M72 47 Q82 48 87 53 Q88 60 82 65 Q75 64 71 58 Q70 52 72 47 Z"/>
-        <path d="M64 56 Q67 60 69 65 Q66 68 62 64 Q61 59 64 56 Z"/>
-        <path d="M88 65 Q92 67 93 71 Q90 73 87 70 Z"/>
-      </g>
-      <!-- Equator and meridian latitude lines -->
-      <line x1="60" y1="58" x2="100" y2="58" stroke="#fff8ec" stroke-width="0.5" opacity="0.6"/>
-      <ellipse cx="80" cy="58" rx="20" ry="7" fill="none" stroke="#fff8ec" stroke-width="0.4" opacity="0.5"/>
-      <ellipse cx="80" cy="58" rx="6" ry="20" fill="none" stroke="#fff8ec" stroke-width="0.4" opacity="0.5"/>
-      <!-- Globe outline -->
-      <circle cx="80" cy="58" r="20" fill="none" stroke="#d4a437" stroke-width="1.4"/>
-
-      <!-- Crown above the globe (decorative spire) -->
-      <line x1="80" y1="38" x2="80" y2="28" stroke="#d4a437" stroke-width="1.8"/>
-      <circle cx="80" cy="25" r="2.8" fill="#ffd166"/>
-      <circle cx="80" cy="25" r="1.2" fill="#c1272d"/>
-
-      <!-- Globe pedestal -->
-      <rect x="74" y="78" width="12" height="5" rx="1" fill="#d4a437"/>
-      <ellipse cx="80" cy="86" rx="14" ry="2.5" fill="#7a0c16"/>
-
-      <!-- Left diya (oil lamp with flame) -->
-      <ellipse cx="28" cy="92" rx="13" ry="2.8" fill="#7a0c16"/>
-      <path d="M16 92 Q17 84 28 82 Q39 84 40 92 Z" fill="#d4a437"/>
-      <path d="M16 92 Q17 84 28 82 Q39 84 40 92 Z" fill="none" stroke="#8b0e1a" stroke-width="0.5"/>
-      <!-- Wick -->
-      <line x1="28" y1="81" x2="28" y2="76" stroke="#3a2a1a" stroke-width="0.8"/>
-      <!-- Flame (animated flicker) -->
-      <g class="flame" style="transform-origin: 28px 76px;">
-        <path d="M28 76 Q23 70 26 63 Q28 67 30 63 Q33 70 28 76 Z" fill="#ff6b35"/>
-        <path d="M28 75 Q26 71 27 67 Q28 69 29 67 Q30 71 28 75 Z" fill="#ffd166"/>
-      </g>
-
-      <!-- Right diya (oil lamp with flame) -->
-      <ellipse cx="132" cy="92" rx="13" ry="2.8" fill="#7a0c16"/>
-      <path d="M120 92 Q121 84 132 82 Q143 84 144 92 Z" fill="#d4a437"/>
-      <path d="M120 92 Q121 84 132 82 Q143 84 144 92 Z" fill="none" stroke="#8b0e1a" stroke-width="0.5"/>
-      <line x1="132" y1="81" x2="132" y2="76" stroke="#3a2a1a" stroke-width="0.8"/>
-      <g class="flame" style="transform-origin: 132px 76px;">
-        <path d="M132 76 Q127 70 130 63 Q132 67 134 63 Q137 70 132 76 Z" fill="#ff6b35"/>
-        <path d="M132 75 Q130 71 131 67 Q132 69 133 67 Q134 71 132 75 Z" fill="#ffd166"/>
-      </g>
-
-      <!-- Decorative golden ground platform -->
-      <ellipse cx="80" cy="103" rx="72" ry="3.5" fill="rgba(0,0,0,0.22)"/>
-      <ellipse cx="80" cy="100" rx="72" ry="3" fill="#d4a437"/>
-      <path d="M8 100 Q80 95 152 100" fill="none" stroke="#fff8ec" stroke-width="0.5" opacity="0.5"/>
-    </svg>
   </header>
 
   <main>
@@ -1054,23 +1005,20 @@
          hidden until the gate succeeds. -->
     <div id="verifyGate">
       <div class="card verify-card">
-        <h2 style="border: none; padding: 0; margin: 0 0 8px;">🔒 Verify Parent's Email to Register</h2>
-        <p style="margin: 0 0 12px; line-height: 1.55;">Welcome! To <strong>register a new volunteer</strong>, your parent or guardian needs to receive a one-time 6-digit code in their inbox <strong>(also check the spam / junk folder)</strong>. This is a quick check to confirm a parent is in the loop — required because all volunteers are minors.</p>
+        <h2 style="border: none; padding: 0; margin: 0 0 8px;">🔒 Step 1 — Verify your email</h2>
+        <p style="margin: 0 0 12px; line-height: 1.55;">We'll email a 6-digit code, then the sign-up form takes about a minute. <strong>Students:</strong> enter your <strong>parent or guardian's</strong> email. <strong>Adults:</strong> enter your own.</p>
         <p style="margin: 0 0 12px; padding: 10px 12px; background: #d1fae5; border-left: 3px solid #059669; border-radius: 4px; font-size: 14px; line-height: 1.5; color: #065f46;">
-          ✅ <strong>Already volunteered?</strong> If you registered earlier and were checked in/out by an admin at the event, you can skip this verification — click the <strong>"⏱️ Volunteered Hours"</strong> tab above to log your hours directly.
+          ✅ <strong>Already volunteered?</strong> Skip this — open the <strong>"⏱️ Volunteered Hours"</strong> tab to log your hours.
         </p>
 
         <!-- Step 1: enter parent email -->
         <div id="verifyStep1">
           <div class="field">
-            <label for="verifyEmailInput">Parent / Guardian Email<span class="req">*</span></label>
-            <input type="email" id="verifyEmailInput" required autocomplete="email" placeholder="e.g., parent@example.com" />
+            <label for="verifyEmailInput">Email (parent/guardian's for students)<span class="req">*</span></label>
+            <input type="email" id="verifyEmailInput" required autocomplete="email" placeholder="name@gmail.com" />
           </div>
           <button type="button" id="sendOtpBtn">Send verification code</button>
-          <p class="helper" style="margin-top: 10px;">A 6-digit code will be sent to this email. The code expires in 10 minutes — <strong>check spam / junk folder if you don't see it within a minute.</strong></p>
-          <p class="helper" style="margin-top: 6px; padding: 8px 10px; background: #fff8ec; border-left: 3px solid var(--fest-saffron); border-radius: 4px; color: #78350f;">
-            ⚠️ <strong>Please use a personal email</strong> — Gmail, Yahoo, iCloud, or Outlook personal. <strong>Do not use a school email</strong> (.edu, .k12, district domains, etc.) — schools block our confirmation messages.
-          </p>
+          <p class="helper" style="margin-top: 10px;">The code expires in 10 minutes. Check spam / junk if you don't see it. Please use a <strong>personal email</strong> (Gmail, Yahoo, iCloud, Outlook) — school addresses block our messages.</p>
         </div>
 
         <!-- Step 2: enter the 6-digit code -->
@@ -1107,293 +1055,145 @@
     <div id="registerView" style="display: none;">
 
     <form id="volunteerForm" novalidate>
+      <div class="card simple-form-card">
+        <p class="form-intro">Volunteer for <strong>GTA Bathukamma</strong> — Saturday, October 17, 2026, 11 AM – 10 PM EST, at Denmark High School (indoors). Fields marked <span class="req" style="color: var(--danger);">*</span> are required.</p>
 
-      <!-- ============ STUDENT VOLUNTEER TOGGLE ============ -->
-      <div class="card student-toggle-card">
-        <p style="margin: 0; font-size: 14px;"><strong>Are you a student volunteer?</strong></p>
-        <p class="helper" style="margin: 4px 0 0;">If yes, please fill the student information section. If no (e.g., parent or adult volunteer), you can skip section 1.</p>
-        <div class="toggle-options">
-          <label class="toggle-radio">
-            <input type="radio" name="isStudent" value="yes" checked onchange="toggleStudentSection()" />
-            <span>Yes — I'm a middle school or high school student</span>
-          </label>
-          <label class="toggle-radio">
-            <input type="radio" name="isStudent" value="no" onchange="toggleStudentSection()" />
-            <span>No — skip student details (adult / parent volunteer)</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- ============ SECTION 1: STUDENT (or ADULT) INFO ============
-           The First/Last Name fields stay visible in BOTH modes — adult volunteers
-           still need a real surname so the hours-lookup matches at checkout.
-           Only the truly student-specific fields (DOB/grade/school/studentId/
-           studentEmail/studentPhone) are hidden when adult mode is selected. -->
-      <div class="card" id="studentInfoSection">
-        <h2 id="section1Title">1. Student Information</h2>
-        <div class="row">
-          <div class="field">
-            <label for="firstName" id="firstNameLabel">First Name<span class="req">*</span></label>
-            <input type="text" id="firstName" name="firstName" required autocomplete="given-name" />
-          </div>
-          <div class="field">
-            <label for="lastName" id="lastNameLabel">Last Name<span class="req">*</span></label>
-            <input type="text" id="lastName" name="lastName" required autocomplete="family-name" />
+        <div class="field">
+          <label>I am a<span class="req">*</span></label>
+          <div class="choice-row">
+            <label class="toggle-radio">
+              <input type="radio" name="isStudent" value="yes" checked onchange="toggleStudentSection()" />
+              <span>Student</span>
+            </label>
+            <label class="toggle-radio">
+              <input type="radio" name="isStudent" value="no" onchange="toggleStudentSection()" />
+              <span>Adult (18+)</span>
+            </label>
           </div>
         </div>
 
-        <!-- ↓↓↓ Wrapped so toggleStudentSection() can hide as a unit in adult mode ↓↓↓ -->
+        <div class="field">
+          <label for="firstName" id="firstNameLabel">Student's First Name<span class="req">*</span></label>
+          <input type="text" id="firstName" name="firstName" required autocomplete="given-name" />
+        </div>
+        <div class="field">
+          <label for="lastName" id="lastNameLabel">Student's Last Name<span class="req">*</span></label>
+          <input type="text" id="lastName" name="lastName" required autocomplete="family-name" />
+        </div>
+
+        <!-- Student-only: hidden (and un-required) in adult mode by toggleStudentSection() -->
         <div id="studentOnlyFields">
-          <div class="row">
-            <div class="field">
-              <label for="dob">Date of Birth<span class="req">*</span></label>
-              <input type="date" id="dob" name="dob" required />
-            </div>
-            <div class="field">
-              <label for="gradeLevel">Grade Level<span class="req">*</span></label>
-              <select id="gradeLevel" name="gradeLevel" required>
-                <option value="">-- Select grade --</option>
-                <option>6th Grade</option>
-                <option>7th Grade</option>
-                <option>8th Grade</option>
-                <option>9th Grade</option>
-                <option>10th Grade</option>
-                <option>11th Grade</option>
-                <option>12th Grade</option>
-              </select>
-            </div>
-          </div>
-
           <div class="field">
-            <label for="schoolName">School Name<span class="req">*</span></label>
-            <input type="text" id="schoolName" name="schoolName" required />
-          </div>
-
-          <div class="field">
-            <label for="studentId">Student ID <span class="helper" style="font-weight: 400;">(optional)</span></label>
-            <input type="text" id="studentId" name="studentId" placeholder="Leave blank if you don't have it handy" />
-          </div>
-
-          <div class="row">
-            <div class="field">
-              <label for="studentEmail">Student Email <span class="helper" style="font-weight: 400;">(optional)</span></label>
-              <input type="email" id="studentEmail" name="studentEmail" autocomplete="email" placeholder="Personal email only (not school)" />
-            </div>
-            <div class="field">
-              <label for="studentPhone">Student Phone <span class="helper" style="font-weight: 400;">(optional)</span></label>
-              <input type="tel" id="studentPhone" name="studentPhone" autocomplete="tel" placeholder="Optional" />
-            </div>
-          </div>
-          <p class="helper" style="margin-top: -6px;">⚠️ If you fill in Student Email, please use a <strong>personal</strong> account (Gmail, Yahoo, etc.) — school addresses block our messages.</p>
-        </div>
-      </div>
-
-      <!-- ============ SECTION 2: PARENT/GUARDIAN OR ADULT CONSENT ============ -->
-      <div class="card">
-        <h2 id="section2Title">2. Parent / Guardian Consent</h2>
-        <!-- Parent name + relationship — student mode only.
-             Adult mode hides this whole row (the adult's first+last name is collected in Section 1). -->
-        <div class="row" id="parentNameRow">
-          <div class="field">
-            <label for="parentName" id="parentNameLabel">Parent/Guardian Name<span class="req">*</span></label>
-            <input type="text" id="parentName" name="parentName" required />
-          </div>
-          <div class="field" id="parentRelationField">
-            <label for="parentRelation">Relationship</label>
-            <select id="parentRelation" name="parentRelation">
-              <option value="">-- Select --</option>
-              <option>Mother</option>
-              <option>Father</option>
-              <option>Guardian</option>
-              <option>Other</option>
+            <label for="gradeLevel">Grade<span class="req">*</span></label>
+            <select id="gradeLevel" name="gradeLevel" required>
+              <option value="">Choose</option>
+              <option>6th Grade</option>
+              <option>7th Grade</option>
+              <option>8th Grade</option>
+              <option>9th Grade</option>
+              <option>10th Grade</option>
+              <option>11th Grade</option>
+              <option>12th Grade</option>
             </select>
           </div>
-        </div>
-
-        <div class="row">
           <div class="field">
-            <label for="parentEmail" id="parentEmailLabel">Parent Email<span class="req">*</span></label>
-            <input type="email" id="parentEmail" name="parentEmail" required />
+            <label for="schoolName">School<span class="req">*</span></label>
+            <input type="text" id="schoolName" name="schoolName" required />
           </div>
+        </div>
+
+        <div id="parentNameRow">
           <div class="field">
-            <label for="parentPhone" id="parentPhoneLabel">Parent Phone<span class="req">*</span></label>
-            <input type="tel" id="parentPhone" name="parentPhone" required />
+            <label for="parentName" id="parentNameLabel">Parent / Guardian Name<span class="req">*</span></label>
+            <input type="text" id="parentName" name="parentName" required autocomplete="name" />
           </div>
         </div>
 
-        <div class="row">
-          <div class="field">
-            <label for="emergencyName">Emergency Contact Name<span class="req">*</span></label>
-            <input type="text" id="emergencyName" name="emergencyName" required />
-          </div>
-          <div class="field">
-            <label for="emergencyPhone">Emergency Contact Phone<span class="req">*</span></label>
-            <input type="tel" id="emergencyPhone" name="emergencyPhone" required />
-          </div>
-        </div>
-
-        <!-- ============ PRIVACY NOTICE ============ -->
-        <div class="privacy-notice">
-          <h3>🛡️ Privacy &amp; Your Data</h3>
-          <p>Before you give consent below, please read how this data is handled. This notice is written in plain language so students and parents both understand.</p>
-
-          <details open>
-            <summary><strong>What we collect &amp; why</strong></summary>
-            <ul>
-              <li><strong>Identity &amp; contact:</strong> name, date of birth, email, phone — to register the volunteer and contact them about the event.</li>
-              <li><strong>Parent/guardian info:</strong> required because volunteers are minors. Used for consent and emergency contact only.</li>
-              <li><strong>School &amp; grade:</strong> so GTA knows where their volunteers come from.</li>
-              <li><strong>Volunteer role &amp; notes:</strong> to plan shifts and match interests.</li>
-              <li><strong>Medical info (optional):</strong> used <em>only</em> by event-day staff for safety. <strong>Never sent in confirmation emails.</strong> Never shared with the AI assistant.</li>
-            </ul>
-          </details>
-
-          <details>
-            <summary><strong>Where the data goes</strong></summary>
-            <ul>
-              <li>A <strong>private Google Sheet</strong> only GTA volunteer coordinators can see.</li>
-              <li>A <strong>confirmation email</strong> to you and your parent (no medical info included).</li>
-              <li>An <strong>AI assistant (Groq)</strong> may briefly process your <em>name, school, role, and notes</em> to write a personalized welcome and certificate. <strong>Medical info is never sent to the AI.</strong></li>
-              <li>Submissions over the internet are encrypted (HTTPS).</li>
-            </ul>
-          </details>
-
-          <details>
-            <summary><strong>How long we keep it &amp; your rights</strong></summary>
-            <ul>
-              <li>Records are kept for <strong>60 days after the event</strong>, then archived or deleted.</li>
-              <li>You can <strong>delete your registration any time</strong> using the "Delete my registration" link in your confirmation email.</li>
-              <li>Parents can revoke consent at any time by emailing the GTA team.</li>
-            </ul>
-          </details>
-
-          <details>
-            <summary><strong>For volunteers under 13</strong></summary>
-            <p>This form requires <strong>parent or guardian consent</strong>, in line with US child-privacy guidelines (COPPA). The form must be filled out together with a parent or legal guardian. By checking the consent box below, the parent confirms they have read this notice and give permission.</p>
-          </details>
-        </div>
-
-        <!-- Parent consent — shown when "Yes — I'm a student" -->
-        <div class="field" id="parentConsentField">
-          <div class="checkbox-row">
-            <input type="checkbox" id="parentConsent" name="parentConsent" required />
-            <label for="parentConsent">
-              <strong>Parent/Guardian Consent (required):</strong> I confirm that I am the parent or legal guardian, I have read the privacy notice above, and I give permission for the student to volunteer at the GTA International Fest organized by the Global Telangana Association (GTA). I understand that GTA and event volunteers will take reasonable safety precautions, and I agree that my emergency contact information may be used during the event if needed.
-            </label>
-          </div>
-        </div>
-
-        <!-- Adult consent — shown when "No — adult / parent volunteer" -->
-        <div class="field" id="adultConsentField" style="display: none;">
-          <div class="checkbox-row">
-            <input type="checkbox" id="adultConsent" name="adultConsent" />
-            <label for="adultConsent">
-              <strong>Adult Volunteer Consent (required):</strong> I confirm I am 18 years or older, I have read and acknowledge the privacy notice above, and I agree to volunteer at the GTA International Fest organized by Global Telangana Association. I agree my emergency contact information may be used during the event if needed.
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============ SECTION 3: VOLUNTEER ACTIVITY ============ -->
-      <div class="card">
-        <h2>3. Volunteer Activity Details</h2>
         <div class="field">
-          <label for="activityName">Volunteer Role<span class="req">*</span></label>
-          <select id="activityName" name="activityName" required onchange="toggleOtherRole()">
-            <option value="">-- Select a role --</option>
+          <label for="parentEmail" id="parentEmailLabel">Parent / Guardian Email<span class="req">*</span></label>
+          <input type="email" id="parentEmail" name="parentEmail" required />
+        </div>
+        <div class="field">
+          <label for="parentPhone" id="parentPhoneLabel">Parent / Guardian Phone<span class="req">*</span></label>
+          <input type="tel" id="parentPhone" name="parentPhone" required autocomplete="tel" inputmode="tel" />
+          <p class="helper" id="phoneHelper">Also used as the emergency contact on event day.</p>
+        </div>
+
+        <div class="field">
+          <label for="shiftPref">When can you help?<span class="req">*</span></label>
+          <select id="shiftPref" name="shiftPref" required>
+            <option value="">Choose</option>
+            <option>Morning (11 AM – 3 PM)</option>
+            <option>Afternoon (3 PM – 7 PM)</option>
+            <option>Evening (7 PM – 10 PM)</option>
+            <option>Flexible / any time</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="hours">How many hours can you volunteer?<span class="req">*</span></label>
+          <input type="number" id="hours" name="hours" min="0.5" max="11" step="0.5" required inputmode="decimal" placeholder="e.g., 4" />
+        </div>
+        <div class="field">
+          <label for="activityName">Where would you like to help?</label>
+          <select id="activityName" name="activityName">
+            <option>Anywhere needed</option>
             <option>Registration desk</option>
             <option>Cultural program help</option>
             <option>Food service</option>
             <option>Stage crew</option>
             <option>Parking</option>
-            <option value="Other">Other</option>
           </select>
+          <p class="helper">Final assignments depend on turnout on the day.</p>
         </div>
-        <div class="field" id="otherRoleField" style="display: none;">
-          <label for="activityNameOther">Please describe your preferred role<span class="req">*</span></label>
-          <input type="text" id="activityNameOther" name="activityNameOther" placeholder="e.g., Photography, Translation, Setup help" />
-        </div>
-
-        <p class="helper" style="font-style: italic; background: #fff8ec; padding: 8px 10px; border-radius: 6px; border-left: 3px solid var(--fest-gold); margin-top: -4px;">
-          Please note: final role assignments may be reshuffled closer to the event based on volunteer turnout and on-the-day needs. Thank you for your flexibility!
-        </p>
-        <p class="helper" style="background: #eff6ff; padding: 10px 12px; border-radius: 6px; border-left: 3px solid #185fa5; margin-top: 8px; color: #1e3a8a;">
-          ☂️ <strong>Outdoor event:</strong> The GTA International Fest is held outdoors. Please plan ahead — bring weather-appropriate clothing, comfortable walking shoes, sunscreen, a refillable water bottle, and an umbrella (sun or rain). A light jacket for the evening is also a good idea.
-        </p>
-
         <div class="field">
-          <label for="organization">Event / Organization<span class="req">*</span></label>
-          <input type="text" id="organization" name="organization" value="Global Telangana Association — GTA International Fest" required />
+          <label for="allergies">Allergies or medical needs we should know about <span class="helper" style="font-weight: 400;">(optional)</span></label>
+          <input type="text" id="allergies" name="allergies" placeholder="Leave blank if none" />
         </div>
 
-        <div class="row">
-          <div class="field">
-            <label for="activityDateDisplay">Event Date</label>
-            <input type="text" id="activityDateDisplay" value="Saturday, June 6, 2026" readonly
-                   style="background: #fff8ec; cursor: not-allowed; color: var(--text); font-weight: 600; border-color: var(--fest-gold);" />
-            <input type="hidden" name="activityDate" value="2026-06-06" />
-          </div>
-          <div class="field">
-            <label for="hours">Hours You Can Volunteer<span class="req">*</span></label>
-            <input type="number" id="hours" name="hours" min="0.5" step="0.5" required placeholder="e.g., 4" />
-          </div>
-        </div>
-        <p class="helper" style="background: #fff8ec; padding: 8px 10px; border-radius: 6px; border-left: 3px solid var(--fest-saffron); margin-top: -8px; margin-bottom: 14px;">
-          <strong>Volunteer hours:</strong> 3:00 PM – 9:00 PM EST. Your assigned shift will fall within this window.
-        </p>
+        <!-- Values the backend / Sheet still expect, no typing needed -->
+        <input type="hidden" name="organization" value="Global Telangana Association — GTA Bathukamma 2026" />
+        <input type="hidden" name="activityDate" value="2026-10-17" />
 
-        <div class="row">
-          <div class="field">
-            <label for="supervisorName">Supervisor Name <span class="helper" style="font-weight: 400;">(optional)</span></label>
-            <input type="text" id="supervisorName" name="supervisorName" placeholder="Leave blank if unknown" />
-          </div>
-          <div class="field">
-            <label for="supervisorContact">Supervisor Contact <span class="helper" style="font-weight: 400;">(optional)</span></label>
-            <input type="text" id="supervisorContact" name="supervisorContact" placeholder="Email or phone (optional)" />
-          </div>
-        </div>
-        <p class="helper" style="margin-top: -8px; margin-bottom: 14px;">
-          Don't worry if you don't know your supervisor yet — the GTA team will assign one before the event.
-        </p>
+        <details class="privacy-mini">
+          <summary>How we use this information</summary>
+          <ul>
+            <li>Saved to a private Google Sheet that only GTA volunteer coordinators can see, and used only to run this event (registration, QR check-in, hours certificate).</li>
+            <li>You get a confirmation email with your check-in QR code. Allergy / medical notes are never included in emails or sent to the AI assistant.</li>
+            <li>Personal details are deleted about a week after the event. You can delete your registration any time using the link in your confirmation email.</li>
+            <li>Students need a parent or guardian's consent (in line with US child-privacy guidelines).</li>
+          </ul>
+        </details>
 
-        <div class="field">
-          <label for="description">Description / Notes <span class="helper" style="font-weight: 400;">(optional)</span></label>
-          <textarea id="description" name="description" placeholder="Anything you'd like the GTA team to know? Languages you speak, special skills, friends you'd like to volunteer with, etc."></textarea>
+        <!-- Parent consent — shown in student mode -->
+        <div class="field" id="parentConsentField">
+          <div class="checkbox-row">
+            <input type="checkbox" id="parentConsent" name="parentConsent" required />
+            <label for="parentConsent">
+              <strong>Parent/Guardian consent<span class="req">*</span></strong> — I am the parent or legal guardian and I give permission for this student to volunteer at GTA Bathukamma, organized by the Global Telangana Association. My phone number may be used as the emergency contact during the event.
+            </label>
+          </div>
         </div>
+
+        <!-- Adult consent — shown in adult mode -->
+        <div class="field" id="adultConsentField" style="display: none;">
+          <div class="checkbox-row">
+            <input type="checkbox" id="adultConsent" name="adultConsent" />
+            <label for="adultConsent">
+              <strong>Consent<span class="req">*</span></strong> — I am 18 or older and I agree to volunteer at GTA Bathukamma, organized by the Global Telangana Association.
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" id="submitBtn">Submit</button>
+        <p class="submit-note">📧 You'll get a confirmation email with your check-in QR code. Check spam / junk if it doesn't arrive in a few minutes.</p>
       </div>
-
-      <!-- ============ SECTION 4: MEDICAL ============ -->
-      <div class="card">
-        <h2>4. Medical &amp; Allergy Information</h2>
-        <p class="helper" style="margin-top: -8px; margin-bottom: 14px;">
-          Optional but strongly recommended for off-site activities.
-        </p>
-
-        <div class="field">
-          <label for="allergies">Known Allergies</label>
-          <input type="text" id="allergies" name="allergies" placeholder="e.g., peanuts, bee stings, none" />
-        </div>
-
-        <div class="field">
-          <label for="medicalConditions">Medical Conditions</label>
-          <input type="text" id="medicalConditions" name="medicalConditions" placeholder="e.g., asthma, diabetes, none" />
-        </div>
-
-        <div class="field">
-          <label for="medications">Current Medications</label>
-          <input type="text" id="medications" name="medications" placeholder="e.g., inhaler, EpiPen, none" />
-        </div>
-      </div>
-
-      <button type="submit" id="submitBtn">Submit Form &amp; Generate Report</button>
-      <p class="submit-note">📧 After submitting, please check your <strong>spam / junk folder</strong> if you don't see the confirmation email within a few minutes.</p>
     </form>
 
     <!-- Success screen shown after submission -->
     <div id="successScreen" class="card">
       <div class="checkmark">&#10003;</div>
       <h2>Thank you for volunteering!</h2>
-      <p id="successMsg">Your registration has been recorded. The GTA team will reach out with event details, schedule, and your assigned role.</p>
+      <p id="successMsg">You're signed up. Check your email for your confirmation and check-in QR code.</p>
       <button onclick="resetForm()" style="background: var(--success); margin-top: 8px;">Register Another Volunteer</button>
     </div>
     </div>
@@ -1434,7 +1234,7 @@
             </div>
             <div class="field">
               <label for="dateVolunteered">Date(s) Volunteered</label>
-              <input type="text" id="dateVolunteered" name="dateVolunteered" placeholder="e.g., June 15, 2026" />
+              <input type="text" id="dateVolunteered" name="dateVolunteered" value="October 17, 2026" />
             </div>
           </div>
           <div class="field">
@@ -1487,7 +1287,7 @@
   </main>
 
   <footer>
-    <p>&copy; Global Telangana Association &middot; GTA International Fest Volunteer Program</p>
+    <p>&copy; Global Telangana Association &middot; GTA Bathukamma 2026 Volunteer Program</p>
   </footer>
 
   <div id="toast" class="toast"></div>

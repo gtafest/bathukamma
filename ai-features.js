@@ -61,6 +61,10 @@ async function callGroq(messages, opts = {}) {
    1) VOICE-FILL THE FORM
    ============================================================ */
 (function setupVoiceFill() {
+  // Disabled for the simplified sign-up form (it is short enough to type, and the
+  // voice parser targeted fields that no longer exist). Set to true to bring it back.
+  const ENABLE_VOICE_FILL = false;
+  if (!ENABLE_VOICE_FILL) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const targetForm = document.getElementById('volunteerForm');
   if (!targetForm) return;
@@ -364,7 +368,7 @@ JSON:`;
   async function getRoleSuggestion(text) {
     const prompt = `A student wrote this in their volunteer notes: "${text}"
 
-Available roles for the GTA International Fest: ${ROLE_LIST.join(', ')}.
+Available roles for the GTA Bathukamma: ${ROLE_LIST.join(', ')}.
 
 Pick the SINGLE best-fit role for them. Return ONLY a JSON object with exactly two keys:
 {"role": "exact role name from the list", "why": "very short reason in one sentence under 80 characters"}`;

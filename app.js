@@ -334,7 +334,7 @@ function showToast(msg, isError = false) {
       const badge = document.createElement('div');
       badge.id = 'verifiedBadge';
       badge.className = 'verified-badge';
-      badge.innerHTML = '✓ <strong>Parent email verified:</strong> ' + email;
+      badge.innerHTML = '✓ <strong>Email verified:</strong> ' + email;
       formEl.insertBefore(badge, formEl.firstChild);
     }
   }
@@ -378,13 +378,13 @@ function toggleStudentSection() {
   const firstNameLabel = document.getElementById('firstNameLabel');
   if (firstNameLabel) {
     firstNameLabel.innerHTML = isStudent
-      ? 'First Name<span class="req">*</span>'
+      ? 'Student\'s First Name<span class="req">*</span>'
       : 'Your First Name<span class="req">*</span>';
   }
   const lastNameLabel = document.getElementById('lastNameLabel');
   if (lastNameLabel) {
     lastNameLabel.innerHTML = isStudent
-      ? 'Last Name<span class="req">*</span>'
+      ? 'Student\'s Last Name<span class="req">*</span>'
       : 'Your Last Name<span class="req">*</span>';
   }
   // Hide the student-only sub-group (DOB through student phone) in adult mode
@@ -405,15 +405,18 @@ function toggleStudentSection() {
   const parentEmailLabel = document.getElementById('parentEmailLabel');
   if (parentEmailLabel) {
     parentEmailLabel.innerHTML = isStudent
-      ? 'Parent Email<span class="req">*</span>'
+      ? 'Parent / Guardian Email<span class="req">*</span>'
       : 'Your Email<span class="req">*</span>';
   }
   const parentPhoneLabel = document.getElementById('parentPhoneLabel');
   if (parentPhoneLabel) {
     parentPhoneLabel.innerHTML = isStudent
-      ? 'Parent Phone<span class="req">*</span>'
+      ? 'Parent / Guardian Phone<span class="req">*</span>'
       : 'Your Phone<span class="req">*</span>';
   }
+
+  const phoneHelper = document.getElementById('phoneHelper');
+  if (phoneHelper) phoneHelper.style.display = isStudent ? '' : 'none';
 
   // ---- Toggle parent consent vs adult consent ----
   const parentConsentField = document.getElementById('parentConsentField');
@@ -530,17 +533,16 @@ form.addEventListener('submit', async (e) => {
   const data = {};
   formData.forEach((value, key) => { data[key] = value; });
 
-  // If role is "Other", combine into activityName so the sheet/PDF stays consistent
-  if (data.activityName === 'Other' && data.activityNameOther) {
-    data.activityName = 'Other: ' + data.activityNameOther;
-  }
-  delete data.activityNameOther;
+  // Shift preference is stored in the Sheet's existing "Description" column
+  // (no new column needed on the backend).
+  if (data.shiftPref) data.description = 'Preferred shift: ' + data.shiftPref;
+  delete data.shiftPref;
 
   // Reject school email addresses (they block our confirmation emails)
   if (isSchoolEmail(data.studentEmail) || isSchoolEmail(data.parentEmail)) {
     showToast(SCHOOL_EMAIL_MSG, true);
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit Form & Generate Report';
+    submitBtn.textContent = 'Submit';
     return;
   }
 
@@ -563,19 +565,24 @@ form.addEventListener('submit', async (e) => {
     }
   }
 
+  // STUDENT MODE: the simplified form no longer asks for a separate emergency
+  // contact — the parent/guardian is the emergency contact.
+  if (data._isStudent !== 'no') {
+    data.emergencyName  = data.parentName  || '';
+    data.emergencyPhone = data.parentPhone || '';
+  }
+
   // Add metadata
   data.submissionId = generateId();
   data.submittedAt = new Date().toISOString();
   data.submittedAtReadable = new Date().toLocaleString();
 
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Generating report...';
+  submitBtn.textContent = 'Submitting…';
 
   try {
-    // 1. Generate and download PDF report
-    generatePDFReport(data);
-
-    // 2. Try to sync to Google Sheets (or queue if offline)
+    // Sync to Google Sheets (or queue if offline). The simplified form no longer
+    // auto-downloads a PDF copy — the confirmation email is the volunteer's record.
     let didSync = false;
     let serverErrorMsg = '';
     let serverErrorCode = '';
@@ -584,7 +591,7 @@ form.addEventListener('submit', async (e) => {
       try {
         await syncToSheet(data);
         didSync = true;
-        successMsg.textContent = '✅ Registration confirmed. A confirmation email has been sent to your registered email (parent CC\'d). Your PDF copy was also downloaded. The GTA team will be in touch with event details.';
+        successMsg.textContent = '✅ You\'re signed up for GTA Bathukamma! A confirmation email with your check-in QR code is on its way. Show that QR code to a GTA admin when you arrive and when you leave.';
       } catch (err) {
         console.error('Sync error:', err);
         serverErrorMsg = err.serverMessage || err.message || 'Unknown error';
@@ -598,7 +605,7 @@ form.addEventListener('submit', async (e) => {
               sessionStorage.removeItem('gtaVerifiedToken');
               sessionStorage.removeItem('gtaVerifiedEmail');
             } catch (e) {}
-            showToast('Your parent-email verification expired. The page will reload so you can verify again.', true);
+            showToast('Your email verification expired. The page will reload so you can verify again.', true);
             setTimeout(() => location.reload(), 3500);
             return;
           }
@@ -612,7 +619,7 @@ form.addEventListener('submit', async (e) => {
         successMsg.textContent = '⚠️ Registration saved on your device. We could not reach GTA right now — it will be sent automatically once your connection is stable.';
       }
     } else if (!CONFIG.appsScriptUrl || CONFIG.appsScriptUrl.includes('YOUR_APPS_SCRIPT_URL')) {
-      successMsg.textContent = '✅ Your copy was downloaded. (GTA sync is not yet configured — please email a copy to the GTA team.)';
+      successMsg.textContent = '⚠️ Sign-up could not be sent (GTA sync is not configured). Please contact the GTA team.';
     } else {
       queueSubmission(data);
       successMsg.textContent = '📥 Registration saved on your device. It will be sent to the GTA team automatically once you are back online.';
@@ -628,7 +635,7 @@ form.addEventListener('submit', async (e) => {
     showToast('Something went wrong. Please try again.', true);
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit Form & Generate Report';
+    submitBtn.textContent = 'Submit';
   }
 });
 
@@ -649,7 +656,7 @@ function generatePDFReport(d) {
   doc.text('Global Telangana Association', pageWidth / 2, 28, { align: 'center' });
   doc.setFontSize(13);
   doc.setFont('helvetica', 'normal');
-  doc.text('GTA International Fest — Volunteer Registration', pageWidth / 2, 47, { align: 'center' });
+  doc.text('GTA Bathukamma 2026 — Volunteer Registration', pageWidth / 2, 47, { align: 'center' });
   doc.setFontSize(10);
   doc.text('Submitted: ' + d.submittedAtReadable, pageWidth / 2, 62, { align: 'center' });
 
@@ -722,7 +729,7 @@ function generatePDFReport(d) {
   doc.setFontSize(9);
   doc.setTextColor(107, 114, 128);
   doc.text(`Submission ID: ${d.submissionId}`, 40, y);
-  doc.text('Global Telangana Association — GTA International Fest', pageWidth - 40, y, { align: 'right' });
+  doc.text('Global Telangana Association — GTA Bathukamma 2026', pageWidth - 40, y, { align: 'right' });
 
   // Filename: LastName_FirstName_Activity_YYYY-MM-DD.pdf
   const safeName = (s) => (s || '').replace(/[^a-z0-9]/gi, '');
@@ -821,6 +828,11 @@ function generateId() {
 
 function resetForm() {
   form.reset();
+  // form.reset() puts the Student/Adult choice back to "Student" and blanks the
+  // locked email, so re-sync the visible fields and restore the verified email.
+  toggleStudentSection();
+  const pe = document.getElementById('parentEmail');
+  if (pe) pe.value = sessionStorage.getItem('gtaVerifiedEmail') || '';
   form.style.display = 'block';
   successScreen.style.display = 'none';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1103,7 +1115,7 @@ function renderFallbackReceipt(d) {
   doc.text('Global Telangana Association', pageWidth / 2, 28, { align: 'center' });
   doc.setFontSize(13);
   doc.setFont('helvetica', 'normal');
-  doc.text('GTA International Fest — Volunteer Hours Receipt', pageWidth / 2, 47, { align: 'center' });
+  doc.text('GTA Bathukamma 2026 — Volunteer Hours Receipt', pageWidth / 2, 47, { align: 'center' });
   doc.setFontSize(10);
   doc.text('Receipt issued: ' + d.submittedAtReadable, pageWidth / 2, 62, { align: 'center' });
 

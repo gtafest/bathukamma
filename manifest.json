@@ -1,7 +1,7 @@
 {
-  "name": "GTA International Fest — Volunteer Registration",
+  "name": "GTA Bathukamma 2026 — Volunteer Sign-up",
   "short_name": "GTA Volunteer",
-  "description": "Volunteer registration form for the Global Telangana Association International Fest, for middle school and high school students.",
+  "description": "Volunteer sign-up for the Global Telangana Association Bathukamma celebration, for students and adults.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

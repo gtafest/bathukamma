@@ -12,22 +12,27 @@ const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatMessages = document.getElementById('chatMessages');
 
-const SYSTEM_PROMPT = `You are a friendly, warm assistant helping middle school and high school students sign up to volunteer at the GTA International Fest, organized by the Global Telangana Association (GTA).
+const SYSTEM_PROMPT = `You are a friendly, warm assistant helping students and adults sign up to volunteer at GTA Bathukamma 2026, organized by the Global Telangana Association (GTA), Atlanta chapter.
+
+Event facts:
+- Bathukamma is Telangana's festival of flowers.
+- Date: Saturday, October 17, 2026. Volunteer window: 11:00 AM – 10:00 PM EST.
+- Venue: Denmark High School (indoors). The GTA team emails each volunteer's assignment before the event.
 
 Your job:
-- Help students complete the volunteer registration form
-- Answer questions about what each field means
-- Explain what kinds of volunteer roles are available at the GTA International Fest (a cultural festival celebrating Telugu and Telangana heritage — students help with registration desks, ushering guests, food/refreshment service, kids' activity areas, cultural program backstage support, photo/video assistance, parking, cleanup, etc.)
-- Be encouraging — many of these students may be volunteering for the first time
+- Help people complete the short sign-up form and explain what each field means
+- Explain what kinds of volunteer roles are available (registration desk, cultural program help, food service, stage crew, parking)
+- Be encouraging — many student volunteers are volunteering for the first time
 - Keep answers SHORT (1-3 sentences max), warm, and age-appropriate
 
 Important context:
-- This form is run by GTA, NOT by the student's school. The student's school is just being asked so GTA knows where their volunteers come from.
-- Parent/guardian consent is REQUIRED for every student volunteer.
-- The "hours" field is an estimate of how many hours the student is willing to volunteer (e.g., 4 hours for a half-day shift, 8 hours for full-day).
-- The "supervisor" field can be left as the GTA volunteer coordinator name if the student doesn't know it yet.
+- The form asks only for: student or adult, name, (students: grade, school, parent/guardian name), email, phone, preferred shift, hours, preferred area, and optional allergy/medical notes.
+- This form is run by GTA, NOT by the student's school. School is asked only so GTA knows where volunteers come from.
+- Parent/guardian consent is REQUIRED for every student volunteer; the parent's email is verified with a 6-digit code and the parent's phone is the emergency contact.
+- "Hours" is an estimate of how many hours the volunteer can help (the event runs 11 hours; any amount is welcome).
+- On event day a GTA admin scans the volunteer's QR code (from the confirmation email) at arrival and departure; hours and the certificate are based on those scans.
 
-If a student asks something off-topic (homework, personal advice, inappropriate content), kindly redirect them to the form or to their parent/teacher. Never collect personal info beyond what the form asks for. If a student asks something specific about the event you do not know (date, exact venue, schedule), tell them the GTA team will share full event details after they register.`;
+If someone asks something off-topic (homework, personal advice, inappropriate content), kindly redirect them to the form or to their parent/teacher. Never collect personal info beyond what the form asks for. If asked something specific you do not know (program schedule, parking details), say the GTA team will share full details by email after sign-up.`;
 
 // Conversation history (kept in memory only, never saved)
 let conversation = [{ role: 'system', content: SYSTEM_PROMPT }];
@@ -36,31 +41,31 @@ let conversation = [{ role: 'system', content: SYSTEM_PROMPT }];
 const BUILTIN_FAQ = [
   {
     triggers: ['gta', 'who is gta', 'what is gta', 'global telangana'],
-    answer: "GTA is the Global Telangana Association — a community organization that hosts the GTA International Fest, a cultural festival celebrating Telugu and Telangana heritage with music, dance, food, and family activities."
+    answer: "GTA is the Global Telangana Association — a community organization. Its Atlanta chapter is hosting GTA Bathukamma 2026, celebrating Telangana's festival of flowers with music, dance, food, and family activities."
   },
   {
-    triggers: ['fest', 'festival', 'event', 'international fest', 'what is the event'],
-    answer: "The GTA International Fest is a one-day cultural festival hosted by the Global Telangana Association. The GTA team will email you exact date, venue, and schedule once you register."
+    triggers: ['bathukamma', 'festival', 'event', 'when', 'date', 'what is the event'],
+    answer: "GTA Bathukamma 2026 is on Saturday, October 17, 2026, 11 AM – 10 PM EST. Bathukamma is Telangana's festival of flowers. It is held indoors at Denmark High School. The GTA team will email your assignment before the event."
   },
   {
     triggers: ['parent', 'consent', 'guardian', 'permission'],
-    answer: "Yes — parent or guardian consent is required for every student volunteer. Your parent needs to give their name, contact info, and check the consent box at the bottom of section 2."
+    answer: "Yes — parent or guardian consent is required for every student volunteer. Your parent or guardian gives their name, email and phone, and ticks the consent box at the bottom of the form."
   },
   {
     triggers: ['role', 'roles', 'what can i do', 'what will i do', 'job', 'task'],
-    answer: "Volunteer roles include the registration desk, ushering guests, food/refreshment service, kids' activity area, stage and cultural program support, photo/video help, parking, and cleanup. Pick whatever interests you in the 'Volunteer Role' field."
+    answer: "Volunteer areas include the registration desk, cultural program help, food service, stage crew, and parking. Pick one under 'Where would you like to help?' or leave it as 'Anywhere needed'."
   },
   {
     triggers: ['hours', 'how many hours', 'time', 'how long'],
-    answer: "Enter how many hours you can volunteer (whole or half hours). Half-day shifts are usually 4 hours, full-day around 8. The GTA team will assign your exact shift later."
+    answer: "Enter how many hours you can volunteer (whole or half hours) and pick the time of day that suits you. The event runs 11 AM – 10 PM EST; any amount helps."
   },
   {
     triggers: ['supervisor', 'who is supervisor', 'supervisor contact'],
-    answer: "If you don't know your supervisor yet, write 'GTA Volunteer Coordinator' and use the GTA team email. The GTA team will assign your real supervisor before the event."
+    answer: "You don't need to name a supervisor — the GTA team assigns one before the event and tells you by email."
   },
   {
     triggers: ['description', 'what to write', 'describe', 'what do i put'],
-    answer: "Just write a sentence about what you'd like to help with and any relevant skills. Example: 'I'd like to help at the registration desk. I'm friendly with strangers and can speak Telugu and English.'"
+    answer: "There's no description box any more — just pick where you'd like to help from the list, or leave it as 'Anywhere needed'."
   },
   {
     triggers: ['school', 'which school', 'my school'],
@@ -68,31 +73,31 @@ const BUILTIN_FAQ = [
   },
   {
     triggers: ['medical', 'allergy', 'medication', 'optional', 'allergies'],
-    answer: "Medical info is optional but really helpful — please mention any food allergies (especially since the event has Indian food) or medication you carry. It helps GTA keep you safe during the event."
+    answer: "The allergy / medical box is optional but helpful — mention any food allergies or medication you carry so GTA can keep you safe. Leave it blank if none."
   },
   {
     triggers: ['student id', 'id number'],
-    answer: "Student ID is optional — leave it blank if you don't have it handy. GTA doesn't need it to register you as a volunteer."
+    answer: "The form doesn't ask for a student ID — just your name, grade and school."
   },
   {
     triggers: ['language', 'telugu', 'english', 'speak'],
-    answer: "You don't need to speak Telugu to volunteer! Many roles (registration, food service, kids' activities, cleanup) work great in English. If you do speak Telugu or Hindi, mention it in the description — GTA loves bilingual volunteers."
+    answer: "You don't need to speak Telugu to volunteer! Many roles (registration, food service, kids' activities, cleanup) work great in English. If you do speak Telugu or Hindi, tell the GTA team on the day — bilingual volunteers are a big help."
   },
   {
     triggers: ['food', 'meal', 'eat', 'lunch'],
-    answer: "Yes — student volunteers usually get a free meal during their shift. Mention any allergies in the medical section so GTA can plan for you."
+    answer: "Yes — student volunteers usually get a free meal during their shift. Mention any allergies in the allergy box so GTA can plan for you."
   },
   {
     triggers: ['certificate', 'community service', 'hours certificate', 'proof', 'credit'],
-    answer: "Yes — after the event, come back to this app, tap the 'Submit Hours' tab, and log how many hours you actually volunteered. You'll get a downloadable hours receipt PDF that you can show your school for community-service credit."
+    answer: "Yes — after the event, come back to this app, tap the 'Volunteered Hours' tab, and log how many hours you actually volunteered. You'll get a GTA certificate PDF that you can show your school for community-service credit."
   },
   {
     triggers: ['submit hours', 'log hours', 'after event', 'after volunteering', 'how do i log', 'record my hours'],
-    answer: "After you've volunteered, open the app again and tap the '⏱️ Submit Hours' tab at the top. Enter the email and last name you used to register, the hours you volunteered, and a quick note. We'll match you to your registration and update GTA's records automatically."
+    answer: "After you've volunteered, open the app again and tap the '⏱️ Volunteered Hours' tab at the top. Enter the email and last name you used to register, the hours you volunteered, and a quick note. We'll match you to your registration and update GTA's records automatically."
   },
   {
     triggers: ["can't find", "couldn't find", 'no registration', 'cannot find', 'not found', 'didn\'t find'],
-    answer: "If the app says it can't find your registration, double-check that the email and last name match exactly what you used to sign up. If you forgot, ask your parent — they got the registration receipt PDF when you signed up."
+    answer: "If the app says it can't find your registration, double-check that the email and last name match exactly what you used to sign up. If you forgot, check the confirmation email (students: your parent received it)."
   },
   {
     triggers: ['offline', 'no internet', 'wifi'],
@@ -121,7 +126,7 @@ function openChat() {
   chatPanel.classList.add('open');
   chatFab.style.display = 'none';
   if (chatMessages.children.length === 0) {
-    showBotMessage("Namaste! 🙏 I'm the GTA volunteer helper. Ask me anything about signing up to volunteer at the GTA International Fest — what roles are available, what to put in each field, or what to expect on the day.", true);
+    showBotMessage("Namaste! 🙏 I'm the GTA volunteer helper. Ask me anything about signing up to volunteer at GTA Bathukamma 2026 — what roles are available, what to put in each field, or what to expect on the day.", true);
   }
   setTimeout(() => chatInput.focus(), 100);
 }
