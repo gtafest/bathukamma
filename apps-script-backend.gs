@@ -100,7 +100,19 @@ const HEADERS = [
   // ---- Event-day check-OUT (admin scans the QR again when the volunteer leaves) ----
   // Verified Duration is the difference between check-in and check-out in hours.
   // Hours Status is 'Verified' (claimed ≤ verified), 'Over-claimed', or 'Unverified' (no check-in/out).
-  'Checked Out At', 'Checked Out By', 'Verified Duration (hrs)', 'Hours Status'
+  'Checked Out At', 'Checked Out By', 'Verified Duration (hrs)', 'Hours Status',
+  // ---- Pre-event team assignment (admin fills "Assigned Team" before the blast goes out) ----
+  // Valid values: "DJ Team", "GTA Stall", "Balloon Team", or leave BLANK (default = registration desk).
+  // "Pre-event Email Sent" auto-stamps when the email is delivered to prevent double-sends.
+  'Assigned Team', 'Pre-event Email Sent',
+  // ---- Post-event thank-you blast tracking ----
+  // Auto-stamps when sendPostEventThankYou() includes this volunteer in the BCC list,
+  // so re-runs only target rows that haven't received the thank-you yet.
+  'Post-event Email Sent',
+  // ---- 7-day data-retention wipe tracking ----
+  // Auto-stamps when wipePiiForRetention() anonymizes the row's PII fields.
+  // Once stamped, the row is skipped on subsequent runs (idempotent).
+  'PII Wiped At'
 ];
 
 function doPost(e) {
@@ -211,7 +223,11 @@ function handleRegistration(data) {
     'Checked Out At':            '',
     'Checked Out By':            '',
     'Verified Duration (hrs)':   '',
-    'Hours Status':              'Unverified'
+    'Hours Status':              'Unverified',
+    'Assigned Team':             '',
+    'Pre-event Email Sent':      '',
+    'Post-event Email Sent':     '',
+    'PII Wiped At':              ''
   };
 
   // Read the SHEET's actual column headers (not HEADERS constant — they may drift)
@@ -239,10 +255,12 @@ function handleRegistration(data) {
 /* ----------------------- Hours submission (matches & updates) ----------------------- */
 function handleHoursSubmission(data) {
   // Rate limit: 5 hours-submissions per email per hour
-  if (!checkRateLimit('hrs:' + (data.email || '').toLowerCase(), 5, 3600)) {
+  // 20 hours-submissions per email per hour (was 5 — too tight for legitimate retries
+  // during testing or for volunteers correcting an over-claimed-hours error)
+  if (!checkRateLimit('hrs:' + (data.email || '').toLowerCase(), 20, 3600)) {
     return jsonResponse({
       status: 'error',
-      message: 'Too many hours-submission attempts. Please wait an hour or contact GTA.'
+      message: 'Too many hours-submission attempts in the last hour. Please wait or contact GTA — or have an admin run clearRateLimits() in the Apps Script editor.'
     });
   }
 
@@ -258,10 +276,11 @@ function handleHoursSubmission(data) {
   }
 
   const headers = all[0];
-  const emailCol      = headers.indexOf('Student Email');
-  const lastNameCol   = headers.indexOf('Last Name');
-  const firstNameCol  = headers.indexOf('First Name');
-  const roleCol       = headers.indexOf('Volunteer Role');
+  const emailCol       = headers.indexOf('Student Email');
+  const parentEmailCol = headers.indexOf('Parent Email');
+  const lastNameCol    = headers.indexOf('Last Name');
+  const firstNameCol   = headers.indexOf('First Name');
+  const roleCol        = headers.indexOf('Volunteer Role');
   const hrsCompletedCol = headers.indexOf('Actual Hours Completed');
   const hrsSubmittedAtCol = headers.indexOf('Hours Submitted At');
   const notesCol      = headers.indexOf('Volunteer Notes');
@@ -271,21 +290,25 @@ function handleHoursSubmission(data) {
   const verifiedDurCol  = headers.indexOf('Verified Duration (hrs)');
   const hoursStatusCol  = headers.indexOf('Hours Status');
 
-  if (emailCol < 0 || lastNameCol < 0 || hrsCompletedCol < 0) {
+  if (lastNameCol < 0 || hrsCompletedCol < 0 || (emailCol < 0 && parentEmailCol < 0)) {
     return jsonResponse({
       status: 'error',
       message: 'Sheet is missing required columns. Ask the GTA admin to redeploy the latest backend.'
     });
   }
 
-  // Find matching row (most recent if multiple registrations from same kid)
+  // Find matching row. We match against Student Email OR Parent Email — adult
+  // volunteers don't have a student email, so their registration email lives
+  // in the Parent Email column. Most-recent-first so retries/duplicates use
+  // the latest record.
   const targetEmail = (data.email || '').toLowerCase().trim();
   const targetLast  = (data.lastName || '').toLowerCase().trim();
   let matchIdx = -1;
   for (let i = all.length - 1; i >= 1; i--) {
-    const rowEmail = String(all[i][emailCol] || '').toLowerCase().trim();
-    const rowLast  = String(all[i][lastNameCol] || '').toLowerCase().trim();
-    if (rowEmail === targetEmail && rowLast === targetLast) {
+    const rowStudentEmail = emailCol       >= 0 ? String(all[i][emailCol]       || '').toLowerCase().trim() : '';
+    const rowParentEmail  = parentEmailCol >= 0 ? String(all[i][parentEmailCol] || '').toLowerCase().trim() : '';
+    const rowLast         = String(all[i][lastNameCol] || '').toLowerCase().trim();
+    if (rowLast === targetLast && (rowStudentEmail === targetEmail || rowParentEmail === targetEmail)) {
       matchIdx = i;
       break;
     }
@@ -385,11 +408,22 @@ function handleHoursSubmission(data) {
   const appreciation = generateAppreciation(volunteerRecord);
   volunteerRecord._aiAppreciation = appreciation;
 
-  // Send a thank-you email to the volunteer (and CC parent) — fire-and-forget
-  try {
-    sendHoursConfirmationEmail(volunteerRecord);
-  } catch (mailErr) {
-    Logger.log('Hours email failed: ' + mailErr.toString());
+  // EMAIL STRATEGY:
+  //   - If the client signals "_pdfPending: true" (default for the modern app),
+  //     we SKIP the immediate text-only thank-you and let the follow-up
+  //     emailCertificate call send a SINGLE consolidated email with the
+  //     personalized PDF attached + parent CC'd.
+  //   - If the client did NOT signal pdfPending (older clients, or PDF
+  //     generation failed), we fall back to the standalone text email so
+  //     the volunteer at least gets confirmation.
+  if (!data._pdfPending) {
+    try {
+      sendHoursConfirmationEmail(volunteerRecord);
+    } catch (mailErr) {
+      Logger.log('Hours email failed: ' + mailErr.toString());
+    }
+  } else {
+    Logger.log('Hours email suppressed — client will trigger emailCertificate with PDF attachment.');
   }
 
   return jsonResponse({
@@ -591,6 +625,859 @@ function checkRateLimit(identifier, maxPerWindow, windowSeconds) {
     Logger.log('Rate-limit check failed (allowing request): ' + e.toString());
     return true;
   }
+}
+
+/* ============================================================
+   ADMIN HELPER — clear rate limits for a specific email (or all)
+   --------------------------------------------------------------
+   Run from the Apps Script editor (Run → choose function) when:
+     - You're testing and hit "too many submission attempts"
+     - A real volunteer accidentally tripped a limit and needs help
+   Apps Script CacheService doesn't expose a list-keys API, so we
+   can't enumerate every key — we clear the known keys for one
+   email instead. For full reset use clearAllRateLimits().
+   ============================================================ */
+function clearRateLimitsForEmail() {
+  // EDIT THIS to the email you want to reset, then click Run.
+  const email = 'b.mallikarjun1@gmail.com';
+
+  const cache = CacheService.getScriptCache();
+  const lower = email.toLowerCase().trim();
+  const keys = [
+    'rl:hrs:' + lower,                              // hours-submission limit
+    'rl:cert:' + lower,                             // cert-email limit
+    'rl:reg:' + lower + '|',                        // registration (student email side)
+    'rl:reg:|' + lower,                             // registration (parent email side)
+    'rl:otp-send:' + lower,                         // OTP send limit
+    'rl:otp-verify:' + lower                        // OTP verify limit
+  ];
+  cache.removeAll(keys);
+  Logger.log('Cleared rate-limit keys for ' + email + ': ' + keys.join(', '));
+  return 'Cleared rate-limit keys for ' + email;
+}
+
+/**
+ * Nuclear option: wipes the entire script cache. Affects all users.
+ * Safe to run (only short-lived cache data lives there: rate-limit counters,
+ * OTP codes, verification tokens). After running, any in-flight OTP will need
+ * to be re-sent and any verified registration session will need to re-verify.
+ */
+function clearAllRateLimits() {
+  // CacheService doesn't have a clearAll(). We can't list keys, so the only
+  // way to nuke all data is to invalidate by replacing values with TTL=1.
+  // Practically: just call clearRateLimitsForEmail() for each test email you
+  // use. This stub stays here so future-you knows the constraint.
+  Logger.log('CacheService has no clearAll API. Edit clearRateLimitsForEmail() with each email you want to reset, or wait the 1-hour TTL.');
+  return 'See log: CacheService has no clearAll API — use clearRateLimitsForEmail() instead.';
+}
+
+/* ============================================================
+   PRE-EVENT EMAIL BLAST — June 4, 2026 at 6 PM EST
+   --------------------------------------------------------------
+   Goal: 48 hours before the event, send EVERY registered volunteer
+   (and their parent) a personalized email telling them where to
+   report on event day.
+
+   Four variants based on the sheet's "Assigned Team" column:
+     - "DJ Team"      → 3 volunteers, sound/music support. Arrive 4:00 PM.
+                        POC: Gouri DJ · +1 773 934 2072
+     - "GTA Stall"    → 4 volunteers, manning water/soft-drinks stall.
+                        Arrive 4:30 PM. POCs: Abhinay, Rohith C · +1 607 761 7217
+     - "Balloon Team" → 1 volunteer, helping decorate. Arrive 4:30 PM.
+                        POC: Ramya · +1 216 333 8633
+     - (blank/other)  → report to the volunteer registration desk
+                        on arrival at 4:30 PM. Default for everyone else.
+
+   Two functions exposed:
+     1. sendPreEventEmails()   — does the actual blast (idempotent)
+     2. setupPreEventTrigger() — schedules sendPreEventEmails() to fire
+                                 automatically on Thu 6/4 at 6 PM EST.
+
+   Usage workflow:
+     a) Open the Google Sheet. In "Assigned Team" column, type
+        "GTA Stall" for the 4 chosen volunteers and "Balloon Team"
+        for the 1 chosen volunteer. Leave blank for everyone else.
+     b) (Recommended) Run testPreEventEmail() once — sends a test
+        copy to the admin email only so you can verify formatting.
+     c) Either: run sendPreEventEmails() manually at 6 PM Thursday,
+        OR run setupPreEventTrigger() once now and walk away —
+        Apps Script will fire it automatically.
+   ============================================================ */
+
+// Edit these only if the contacts/teams change before the event:
+const PRE_EVENT_CONFIG = {
+  // When to fire the auto-trigger (Eastern Time)
+  scheduledYear:  2026,
+  scheduledMonth: 5,        // 0-indexed → 5 = June
+  scheduledDay:   4,        // June 4 = Thursday
+  scheduledHour:  18,       // 6 PM
+  scheduledMinute: 0,
+  scheduledTimezone: 'America/New_York',
+  // Test recipient (used by testPreEventEmail() only)
+  testRecipient: 'b.mallikarjun1@gmail.com',
+  // Per-team POC details — appear in the corresponding email body.
+  // arrivalTime is the team's specific call time on event day (6 June 2026).
+  // DJ Team arrives early (4:00 PM) for sound check; all other teams arrive
+  // 30 minutes before the public event open at 4:30 PM.
+  teams: {
+    'DJ Team': {
+      label: 'DJ Team — Sound & Music',
+      pocLine: 'Gouri DJ',
+      pocPhone: '+1 773 934 2072',
+      arrivalTime: '4:00 PM EST',
+      arrivalNote: '(early call — please be on-site by 4:00 PM sharp for sound check)',
+      duties: 'You will be part of the DJ Team helping with sound setup, music coordination, and live audio support throughout the event.'
+    },
+    'GTA Stall': {
+      label: 'GTA Stall — Water & Soft Drinks',
+      pocLine: 'Abhinay & Rohith C',
+      pocPhone: '+1 607 761 7217',
+      arrivalTime: '4:30 PM EST',
+      arrivalNote: '',
+      duties: 'You will be helping manage the GTA stall — serving water, soft drinks, and assisting visitors at the booth.'
+    },
+    'Balloon Team': {
+      label: 'Balloon Team — Decorations',
+      pocLine: 'Ramya',
+      pocPhone: '+1 216 333 8633',
+      arrivalTime: '4:30 PM EST',
+      arrivalNote: '',
+      duties: 'You will be part of the Balloon Team helping with decorations and balloon arrangements at the venue.'
+    }
+  },
+  // Default for everyone else (blank Assigned Team)
+  defaultTeam: {
+    label: 'Registration Desk',
+    pocLine: 'GTA Volunteer Registration Desk',
+    pocPhone: '',
+    arrivalTime: '4:30 PM EST',
+    arrivalNote: '',
+    duties: 'On arrival at the venue, please check in at the GTA Volunteer Registration Desk. The on-site team will assign you a role based on the day-of needs.'
+  },
+  // Event details — same for all variants
+  event: {
+    name: 'GTA International Fest 2026',
+    date: 'Saturday, June 6, 2026',
+    time: '3:00 PM – 9:00 PM EST',
+    venue: 'Fowler Park, Cumming GA'
+  }
+};
+
+/* ------------------------ THE BLAST ------------------------ */
+function sendPreEventEmails() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  ensureHeaders(sheet);
+  const all = sheet.getDataRange().getValues();
+  if (all.length < 2) {
+    Logger.log('No volunteers registered yet — nothing to send.');
+    return 'No volunteers on file.';
+  }
+
+  const headers = all[0];
+  const idx = (name) => headers.indexOf(name);
+
+  const cFirst       = idx('First Name');
+  const cLast        = idx('Last Name');
+  const cStudentEmail = idx('Student Email');
+  const cParentEmail = idx('Parent Email');
+  const cParentName  = idx('Parent/Guardian Name');
+  const cAssigned    = idx('Assigned Team');
+  const cSentStamp   = idx('Pre-event Email Sent');
+  const cIsStudent   = idx('Is Student?');
+
+  if (cAssigned < 0 || cSentStamp < 0) {
+    throw new Error('Sheet is missing "Assigned Team" and/or "Pre-event Email Sent" columns. Run ensureHeaders() or add them manually.');
+  }
+
+  let sent = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (let i = 1; i < all.length; i++) {
+    const r = all[i];
+    const rowNum = i + 1;
+    const firstName    = String(r[cFirst]       || '').trim();
+    const lastName     = String(r[cLast]        || '').trim();
+    const studentEmail = String(r[cStudentEmail] || '').toLowerCase().trim();
+    const parentEmail  = String(r[cParentEmail]  || '').toLowerCase().trim();
+    const isStudent    = String(r[cIsStudent]   || 'Yes').trim();
+    const assigned     = String(r[cAssigned]    || '').trim();
+    const alreadySent  = String(r[cSentStamp]   || '').trim();
+
+    // Pick primary recipient: student-mode uses studentEmail (fallback parent),
+    // adult-mode the parentEmail IS the volunteer's own email.
+    const primaryEmail = studentEmail || parentEmail;
+    if (!primaryEmail || primaryEmail.indexOf('@') < 0) {
+      Logger.log('Row ' + rowNum + ' (' + firstName + ' ' + lastName + '): no valid email, skipping.');
+      skipped++;
+      continue;
+    }
+    if (alreadySent) {
+      Logger.log('Row ' + rowNum + ' (' + firstName + ' ' + lastName + '): already sent at ' + alreadySent + ', skipping.');
+      skipped++;
+      continue;
+    }
+
+    // Pick the right team variant
+    const team = PRE_EVENT_CONFIG.teams[assigned] || PRE_EVENT_CONFIG.defaultTeam;
+
+    try {
+      const subject = `[GTA Fest 2026] Your volunteer assignment — ${team.label} · See you Saturday!`;
+      const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+      const html = buildPreEventEmailHtml(firstName, lastName, team, isStudent);
+      const plain = buildPreEventEmailPlain(firstName, lastName, team, isStudent);
+
+      const options = {
+        name: 'Global Telangana Association',
+        htmlBody: html
+      };
+      // CC parent if they entered one AND it's different from the primary
+      // (in adult mode, primaryEmail === parentEmail, so no self-CC)
+      if (parentEmail && parentEmail !== primaryEmail && parentEmail.indexOf('@') > -1) {
+        options.cc = parentEmail;
+      }
+
+      MailApp.sendEmail(primaryEmail, subject, plain, options);
+      sheet.getRange(rowNum, cSentStamp + 1).setValue(new Date().toLocaleString());
+      Logger.log('Sent row ' + rowNum + ' to=' + primaryEmail + ' cc=' + (options.cc || '(none)') + ' team=' + (team.label));
+      sent++;
+    } catch (err) {
+      Logger.log('FAILED row ' + rowNum + ' (' + firstName + ' ' + lastName + '): ' + err.toString());
+      errors++;
+    }
+  }
+
+  SpreadsheetApp.flush();
+  const summary = `Pre-event email blast complete: sent=${sent}, skipped=${skipped}, errors=${errors}. Quota remaining: ${MailApp.getRemainingDailyQuota()}.`;
+  Logger.log(summary);
+  return summary;
+}
+
+function buildPreEventEmailPlain(firstName, lastName, team, isStudent) {
+  const e = PRE_EVENT_CONFIG.event;
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+  const studentNote = (isStudent === 'No')
+    ? ''
+    : '\n(Parents/guardians: a copy of this email has been sent to you so you know your volunteer\'s assignment for Saturday.)\n';
+  const pocBlock = team.pocPhone
+    ? `On arrival at the venue, please contact:\n  ${team.pocLine}\n  Phone: ${team.pocPhone}\n`
+    : `On arrival at the venue, please report to the ${team.pocLine}.\n`;
+  const arrivalLine = team.arrivalNote
+    ? `  ${team.arrivalTime}  ${team.arrivalNote}`
+    : `  ${team.arrivalTime}`;
+
+  return (
+    greeting + '\n\n' +
+    `This is a reminder that ${e.name} is THIS SATURDAY!\n\n` +
+    `──────────────────────────────\n` +
+    `Date:  ${e.date}\n` +
+    `Event: ${e.time}\n` +
+    `Venue: ${e.venue}\n` +
+    `──────────────────────────────\n\n` +
+    `YOUR ASSIGNMENT: ${team.label}\n\n` +
+    `>>> ARRIVE BY: ${team.arrivalTime} ${team.arrivalNote || ''} <<<\n\n` +
+    team.duties + '\n\n' +
+    pocBlock + '\n' +
+    `What to bring:\n` +
+    `  • Your QR code from your original registration confirmation (the GTA admin will scan it on arrival to check you in).\n` +
+    `  • Comfortable, closed-toe shoes.\n` +
+    `  • A water bottle (we will refill).\n` +
+    `  • A smile :)\n\n` +
+    `Questions before the event? Reply to this email or contact gtaadmin2026@gmail.com.\n` +
+    studentNote +
+    '\nLooking forward to seeing you Saturday!\n\n' +
+    'Warm regards,\n' +
+    'Global Telangana Association — Atlanta\n' +
+    'www.gtaatlanta.org'
+  );
+}
+
+function buildPreEventEmailHtml(firstName, lastName, team, isStudent) {
+  const e = PRE_EVENT_CONFIG.event;
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+  const pocHtml = team.pocPhone
+    ? `<div style="background:#fff8ec;border-left:4px solid #d4a437;padding:12px 16px;margin:14px 0;border-radius:4px"><strong>📍 On arrival at the venue, contact:</strong><br><strong style="font-size:16px">${team.pocLine}</strong><br>📞 <a href="tel:${team.pocPhone.replace(/\s+/g,'')}" style="color:#c1272d;text-decoration:none">${team.pocPhone}</a></div>`
+    : `<div style="background:#fff8ec;border-left:4px solid #d4a437;padding:12px 16px;margin:14px 0;border-radius:4px"><strong>📍 On arrival at the venue:</strong><br>Please report to the <strong>${team.pocLine}</strong>. The on-site team will assign you a role.</div>`;
+  const parentLine = (isStudent === 'No')
+    ? ''
+    : '<p style="color:#6b7280;font-size:12px;margin-top:18px;padding-top:12px;border-top:1px solid #e5e7eb">A copy of this email has also been sent to your parent/guardian so they know your assignment for Saturday.</p>';
+
+  return (
+    `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:620px;color:#1f2937">` +
+    `<div style="background:linear-gradient(135deg,#7a0c16,#c1272d 60%,#ff6b35);color:#fff;padding:22px;border-radius:10px 10px 0 0">` +
+      `<div style="font-size:12px;letter-spacing:1.5px;opacity:0.9">GLOBAL TELANGANA ASSOCIATION · ATLANTA</div>` +
+      `<div style="font-size:22px;font-weight:800;margin-top:6px">🎉 Your Volunteer Assignment</div>` +
+      `<div style="font-size:14px;margin-top:4px;color:#ffd166">${e.name}</div>` +
+    `</div>` +
+    `<div style="background:#fff8ec;padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px">` +
+      `<p>${greeting}</p>` +
+      `<p>This is a reminder that <strong>${e.name}</strong> is <strong>THIS SATURDAY</strong>!</p>` +
+      `<table style="border-collapse:collapse;margin:16px 0;width:100%">` +
+        `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb;width:30%"><strong>📅 Date</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb">${e.date}</td></tr>` +
+        `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>⏰ Time</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb">${e.time}</td></tr>` +
+        `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>📍 Venue</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb">${e.venue}</td></tr>` +
+      `</table>` +
+      `<div style="background:linear-gradient(135deg,#fff,#fef3c7);border:2px solid #d4a437;border-radius:8px;padding:16px;margin:16px 0">` +
+        `<div style="font-size:11px;letter-spacing:1.5px;color:#92400e;font-weight:700">YOUR ASSIGNMENT</div>` +
+        `<div style="font-size:20px;font-weight:800;color:#7a0c16;margin-top:4px">${team.label}</div>` +
+        `<p style="margin:10px 0 0;color:#451a03">${team.duties}</p>` +
+      `</div>` +
+      // Arrival-time call-out — bright so it can't be missed
+      `<div style="background:#7a0c16;color:#fff;border-radius:8px;padding:14px 18px;margin:16px 0;text-align:center">` +
+        `<div style="font-size:11px;letter-spacing:1.5px;color:#ffd166;font-weight:700">⏰ ARRIVE BY</div>` +
+        `<div style="font-size:24px;font-weight:800;margin-top:4px;letter-spacing:0.5px">${team.arrivalTime}</div>` +
+        (team.arrivalNote ? `<div style="font-size:12px;color:#ffd166;margin-top:6px;font-style:italic">${team.arrivalNote}</div>` : '') +
+      `</div>` +
+      pocHtml +
+      `<p style="margin-top:18px"><strong>What to bring:</strong></p>` +
+      `<ul style="margin:6px 0 16px;padding-left:22px;color:#374151">` +
+        `<li>Your <strong>QR code</strong> from your original registration email (the GTA admin will scan it on arrival to check you in)</li>` +
+        `<li>Comfortable, closed-toe shoes</li>` +
+        `<li>A water bottle (we'll refill)</li>` +
+        `<li>A smile 🙂</li>` +
+      `</ul>` +
+      `<p style="color:#6b7280;font-size:13px">Questions before the event? Reply to this email or contact <a href="mailto:gtaadmin2026@gmail.com" style="color:#c1272d">gtaadmin2026@gmail.com</a>.</p>` +
+      parentLine +
+      `<p style="margin-top:20px">Looking forward to seeing you Saturday!<br><br>Warm regards,<br><strong>Global Telangana Association — Atlanta</strong><br>` +
+      `<a href="https://www.gtaatlanta.org" style="color:#c1272d">www.gtaatlanta.org</a></p>` +
+    `</div>` +
+    `</div>`
+  );
+}
+
+/* ---------- SAFE TEST: sends ONE email to the test recipient only ---------- */
+function testPreEventEmail() {
+  const team = PRE_EVENT_CONFIG.teams['GTA Stall']; // preview the stall variant
+  const html = buildPreEventEmailHtml('Test', 'Volunteer', team, 'Yes');
+  const plain = buildPreEventEmailPlain('Test', 'Volunteer', team, 'Yes');
+  MailApp.sendEmail(PRE_EVENT_CONFIG.testRecipient,
+    '[TEST] GTA pre-event email — GTA Stall variant',
+    plain,
+    { name: 'Global Telangana Association', htmlBody: html });
+  Logger.log('Test email sent to ' + PRE_EVENT_CONFIG.testRecipient);
+  return 'Sent test to ' + PRE_EVENT_CONFIG.testRecipient;
+}
+
+/* ---------- TRIGGER SETUP: schedule sendPreEventEmails for Thu 6/4 6 PM EST ---------- */
+function setupPreEventTrigger() {
+  // Remove any existing trigger for this function so we don't duplicate
+  const existing = ScriptApp.getProjectTriggers();
+  existing.forEach(function(t) {
+    if (t.getHandlerFunction() === 'sendPreEventEmails') {
+      ScriptApp.deleteTrigger(t);
+      Logger.log('Removed existing trigger.');
+    }
+  });
+
+  // Build the target time in the configured timezone
+  const c = PRE_EVENT_CONFIG;
+  // Apps Script time-based triggers fire in the script's timezone, so set it
+  // to America/New_York at the project level for accuracy, then schedule.
+  const target = new Date(c.scheduledYear, c.scheduledMonth, c.scheduledDay, c.scheduledHour, c.scheduledMinute, 0);
+  const now = new Date();
+  if (target.getTime() < now.getTime()) {
+    throw new Error('Target time ' + target.toString() + ' is in the past. Edit PRE_EVENT_CONFIG.');
+  }
+
+  ScriptApp.newTrigger('sendPreEventEmails')
+    .timeBased()
+    .at(target)
+    .inTimezone(c.scheduledTimezone)
+    .create();
+  const summary = 'Trigger scheduled for ' + target.toLocaleString() + ' (' + c.scheduledTimezone + '). It will run ONCE.';
+  Logger.log(summary);
+  return summary;
+}
+
+/* ---------- ADMIN HELPER: clear "Pre-event Email Sent" stamps for a re-run ---------- */
+function clearPreEventSendStamps() {
+  // Run this if you want to re-send to everyone (e.g. you fixed a typo in the
+  // email body). It blanks out the "Pre-event Email Sent" column so the blast
+  // function sees every row as un-sent again.
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const all = sheet.getDataRange().getValues();
+  const headers = all[0];
+  const col = headers.indexOf('Pre-event Email Sent');
+  if (col < 0) return 'No "Pre-event Email Sent" column found.';
+  for (let i = 1; i < all.length; i++) {
+    sheet.getRange(i + 1, col + 1).setValue('');
+  }
+  SpreadsheetApp.flush();
+  Logger.log('Cleared ' + (all.length - 1) + ' send stamps.');
+  return 'Cleared all send stamps. Next sendPreEventEmails() run will email everyone again.';
+}
+
+/* ============================================================
+   POST-EVENT THANK-YOU BLAST
+   --------------------------------------------------------------
+   Sends ONE email FROM gtaadmin2026@gmail.com TO itself, with
+   every volunteer (and their parent, if different) BCC'd. The
+   BCC pattern means recipients can't see each other's emails —
+   important for privacy on a community-organization mailing list.
+
+   FILTER: only volunteers whose row has BOTH "Checked In At" AND
+   "Checked Out At" populated. Volunteers who registered but
+   didn't actually attend the event are excluded automatically.
+
+   To make the From: address actually be gtaadmin2026@gmail.com,
+   ONE of these must be true:
+     (a) The Apps Script project is owned by gtaadmin2026@gmail.com
+         (best — run this script from that account), OR
+     (b) gtaadmin2026@gmail.com is set up as a "send-mail-as" alias
+         in the script owner's Gmail Settings → Accounts → "Send mail
+         as", with verification completed.
+   Otherwise MailApp falls back to the script owner's primary
+   address and the from-option is silently ignored.
+   ============================================================ */
+
+const POST_EVENT_CONFIG = {
+  fromEmail: 'gtaadmin2026@gmail.com',
+  fromName:  'Global Telangana Association — Atlanta',
+  // Test recipient (used by testPostEventThankYou)
+  testRecipient: 'b.mallikarjun1@gmail.com',
+  registrationUrl: 'https://gtafest.github.io/gta-volunteer-fest/',
+  // How many days post-event before data deletion (used in email body)
+  dataRetentionDays: 7
+};
+
+function sendPostEventThankYou() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  ensureHeaders(sheet);
+  const all = sheet.getDataRange().getValues();
+  if (all.length < 2) {
+    Logger.log('No volunteers on file — nothing to send.');
+    return 'No volunteers on file.';
+  }
+
+  const headers = all[0];
+  const idx = (n) => headers.indexOf(n);
+  const cFirst       = idx('First Name');
+  const cLast        = idx('Last Name');
+  const cStudentEmail = idx('Student Email');
+  const cParentEmail = idx('Parent Email');
+  const cCheckedIn   = idx('Checked In At');
+  const cCheckedOut  = idx('Checked Out At');
+  const cSent        = idx('Post-event Email Sent');
+
+  if (cCheckedIn < 0 || cCheckedOut < 0) {
+    throw new Error('Sheet is missing "Checked In At" / "Checked Out At" columns. Redeploy the latest backend (ensureHeaders adds them automatically on first save).');
+  }
+  if (cSent < 0) {
+    throw new Error('Sheet is missing "Post-event Email Sent" column. Add it as the last column, or redeploy the latest backend.');
+  }
+
+  // Collect deduped recipients + matching row numbers
+  const recipients = {};      // email → true (acts as a Set)
+  const rowsToStamp = [];     // row numbers to mark as "sent" after success
+  let scanned = 0;
+  let skippedNotCheckedOut = 0;
+  let skippedAlreadySent = 0;
+
+  for (let i = 1; i < all.length; i++) {
+    const r = all[i];
+    scanned++;
+    const checkedIn  = String(r[cCheckedIn]  || '').trim();
+    const checkedOut = String(r[cCheckedOut] || '').trim();
+    if (!checkedIn || !checkedOut) { skippedNotCheckedOut++; continue; }
+    if (String(r[cSent] || '').trim()) { skippedAlreadySent++; continue; }
+
+    const studentEmail = String(r[cStudentEmail] || '').toLowerCase().trim();
+    const parentEmail  = String(r[cParentEmail]  || '').toLowerCase().trim();
+    let added = false;
+    if (studentEmail && studentEmail.indexOf('@') > -1) {
+      recipients[studentEmail] = true;
+      added = true;
+    }
+    if (parentEmail && parentEmail.indexOf('@') > -1 && parentEmail !== studentEmail) {
+      recipients[parentEmail] = true;
+      added = true;
+    }
+    if (added) rowsToStamp.push(i + 1);
+  }
+
+  const bccList = Object.keys(recipients);
+  if (bccList.length === 0) {
+    const msg = 'No volunteers met the criteria (checked-IN + checked-OUT + not already sent). Scanned=' + scanned + ' skippedNotCheckedOut=' + skippedNotCheckedOut + ' skippedAlreadySent=' + skippedAlreadySent;
+    Logger.log(msg);
+    return msg;
+  }
+
+  Logger.log('Post-event thank-you: scanned=' + scanned + ' eligible=' + rowsToStamp.length + ' uniqueEmails=' + bccList.length);
+
+  // Gmail BCC has a soft limit — chunk at 90 to be safe (limit is 100 but
+  // some headers count, and a few addresses may be invalid).
+  const CHUNK = 90;
+  const chunks = [];
+  for (let k = 0; k < bccList.length; k += CHUNK) chunks.push(bccList.slice(k, k + CHUNK));
+
+  const subject = '🙏 Thank You, Volunteers & Families — From the Entire GTA Family';
+  const plainBody = buildPostEventPlain();
+  const htmlBody  = buildPostEventHtml();
+
+  // Resolve sending strategy ONCE (not per-chunk) — log identity for audit trail
+  let effectiveUser = '(unknown)';
+  let aliases = [];
+  try { effectiveUser = Session.getEffectiveUser().getEmail(); } catch (e) {}
+  try { aliases = GmailApp.getAliases(); } catch (e) {}
+  let useAlias = false;
+  if (effectiveUser.toLowerCase() === POST_EVENT_CONFIG.fromEmail.toLowerCase()) {
+    Logger.log('IDENTITY: script owner IS ' + POST_EVENT_CONFIG.fromEmail + ' — From: will be set automatically by MailApp. No alias needed.');
+  } else if (aliases.indexOf(POST_EVENT_CONFIG.fromEmail) > -1) {
+    useAlias = true;
+    Logger.log('IDENTITY: using verified alias ' + POST_EVENT_CONFIG.fromEmail + ' on owner ' + effectiveUser);
+  } else {
+    Logger.log('⚠️ IDENTITY WARNING: script owner is ' + effectiveUser + ' and ' + POST_EVENT_CONFIG.fromEmail + ' is NOT an alias. The blast will go FROM ' + effectiveUser + ' (NOT from gtaadmin2026). If this is wrong, abort with Ctrl+C or close the tab.');
+  }
+
+  let sentBatches = 0;
+  let totalSent   = 0;
+  chunks.forEach(function(chunk, idx) {
+    try {
+      const options = {
+        name: POST_EVENT_CONFIG.fromName,
+        htmlBody: htmlBody,
+        bcc: chunk.join(',')
+      };
+      if (useAlias) options.from = POST_EVENT_CONFIG.fromEmail;
+      // Send TO the fromEmail itself, BCC everyone
+      MailApp.sendEmail(POST_EVENT_CONFIG.fromEmail, subject, plainBody, options);
+      sentBatches++;
+      totalSent += chunk.length;
+      Logger.log('Batch ' + (idx + 1) + '/' + chunks.length + ': BCC count=' + chunk.length);
+    } catch (err) {
+      Logger.log('Batch ' + (idx + 1) + ' FAILED: ' + err.toString());
+    }
+  });
+
+  // Stamp each eligible row only if at least one batch went out successfully
+  if (sentBatches > 0) {
+    const ts = new Date().toLocaleString();
+    rowsToStamp.forEach(function(rowNum) {
+      sheet.getRange(rowNum, cSent + 1).setValue(ts);
+    });
+    SpreadsheetApp.flush();
+  }
+
+  const summary = 'Post-event thank-you complete: batches=' + sentBatches + '/' + chunks.length + ' uniqueRecipients=' + totalSent + ' rowsStamped=' + (sentBatches > 0 ? rowsToStamp.length : 0) + ' quotaRemaining=' + MailApp.getRemainingDailyQuota();
+  Logger.log(summary);
+  return summary;
+}
+
+function buildPostEventPlain() {
+  const reg = POST_EVENT_CONFIG.registrationUrl;
+  const d   = POST_EVENT_CONFIG.dataRetentionDays;
+  return (
+    'Dear Volunteers and Parents,\n\n' +
+    '────────────────────────────────────\n' +
+    'You are the foundation of GTA International Fest 2026.\n' +
+    '────────────────────────────────────\n\n' +
+    'On behalf of the entire Global Telangana Association family, THANK YOU. ' +
+    'Our volunteers — every single one of you — are the heart of this event. The festival came to life because each of you chose to give your time, your energy, ' +
+    'and your spirit of seva to your community. Without you, none of it happens.\n\n' +
+    'To our parents and guardians: an equally heartfelt thank-you. Your incredible support, your encouragement, and the values you instill in these young hearts ' +
+    'are what gave our volunteers the courage and confidence to step up and serve. Every kid who showed up on Saturday did so because someone at home believed in them. ' +
+    'Thank you for being that someone.\n\n' +
+    '────────────────────────────────────\n' +
+    'YOUR DIGITAL VOLUNTEER CERTIFICATE\n' +
+    '────────────────────────────────────\n' +
+    'Many of you have already downloaded your personalized GTA Volunteer Certificate. If you have not yet:\n\n' +
+    '  1. Open ' + reg + '\n' +
+    '  2. Click the "⏱️ Volunteered Hours" tab\n' +
+    '  3. Enter the same email and last name you used to register\n' +
+    '  4. Enter your hours and click submit\n' +
+    '\n' +
+    'Your certificate will be downloaded automatically AND a copy emailed to you (and your parent, if you provided a parent email). ' +
+    'If anything on the certificate needs adjustment — a misspelling, a different name format, anything at all — just reply to this email at ' +
+    'gtaadmin2026@gmail.com and we will be happy to accommodate any changes you need.\n\n' +
+    '────────────────────────────────────\n' +
+    'IMPORTANT — DATA RETENTION\n' +
+    '────────────────────────────────────\n' +
+    'To protect your privacy, the registration data we hold (names, contact info, hours) will be automatically deleted from our system in approximately ' +
+    d + ' days from today. Please download your certificate before then. Even after the data is deleted, you can still reach us at gtaadmin2026@gmail.com ' +
+    'with any questions, requests, or future volunteering interest — we are always here.\n\n' +
+    '────────────────────────────────────\n' +
+    'LOOKING FORWARD\n' +
+    '────────────────────────────────────\n' +
+    'Thank you, once again, from the entire GTA family. As we move forward, we are incredibly excited to call on amazing volunteers like you for the events ' +
+    'and community-service initiatives we will be organizing in the coming months. Your spirit of seva is what keeps our community strong and our culture alive. ' +
+    'We cannot wait to serve alongside you again soon.\n\n' +
+    'With deep gratitude,\n' +
+    'Global Telangana Association — Atlanta\n' +
+    'gtaadmin2026@gmail.com\n' +
+    'www.gtaatlanta.org'
+  );
+}
+
+function buildPostEventHtml() {
+  const reg = POST_EVENT_CONFIG.registrationUrl;
+  const d   = POST_EVENT_CONFIG.dataRetentionDays;
+  return (
+    `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:640px;color:#1f2937;line-height:1.6">` +
+      // Header
+      `<div style="background:linear-gradient(135deg,#7a0c16,#c1272d 60%,#ff6b35);color:#fff;padding:28px 24px;border-radius:10px 10px 0 0;text-align:center">` +
+        `<div style="font-size:12px;letter-spacing:2px;opacity:0.85">GLOBAL TELANGANA ASSOCIATION · ATLANTA</div>` +
+        `<div style="font-size:28px;font-weight:800;margin-top:8px">🙏 Thank You</div>` +
+        `<div style="font-size:14px;margin-top:6px;color:#ffd166">From the Entire GTA Family</div>` +
+      `</div>` +
+      // Body
+      `<div style="background:#fff8ec;padding:28px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px">` +
+        `<p style="margin:0 0 14px">Dear Volunteers and Parents,</p>` +
+        // Section 1 — Foundation thanks
+        `<div style="background:#fff;border-left:4px solid #d4a437;padding:14px 18px;margin:18px 0;border-radius:4px">` +
+          `<div style="font-size:11px;letter-spacing:1.5px;color:#92400e;font-weight:700">YOU ARE THE FOUNDATION</div>` +
+          `<p style="margin:8px 0 0">On behalf of the entire <strong>Global Telangana Association family</strong>, THANK YOU. Our volunteers — every single one of you — are the heart of this event. The festival came to life because each of you chose to give your time, your energy, and your spirit of <em>seva</em> to your community. Without you, none of it happens.</p>` +
+          `<p style="margin:12px 0 0">To our <strong>parents and guardians</strong>: an equally heartfelt thank-you. Your incredible support, encouragement, and the values you instill in these young hearts are what gave our volunteers the courage and confidence to step up and serve. Every kid who showed up on Saturday did so because someone at home believed in them. Thank you for being that someone.</p>` +
+        `</div>` +
+        // Section 2 — Certificate instructions
+        `<div style="background:#fff;border:1px solid #e5e7eb;padding:14px 18px;margin:18px 0;border-radius:6px">` +
+          `<div style="font-size:14px;font-weight:800;color:#7a0c16;margin-bottom:6px">📜 Your Digital Volunteer Certificate</div>` +
+          `<p style="margin:0 0 10px">Many of you have already downloaded your personalized GTA Volunteer Certificate. If you haven't yet, it takes about 30 seconds:</p>` +
+          `<ol style="margin:0 0 10px;padding-left:22px">` +
+            `<li>Open <a href="${reg}" style="color:#c1272d;font-weight:600">${reg}</a></li>` +
+            `<li>Click the <strong>"⏱️ Volunteered Hours"</strong> tab</li>` +
+            `<li>Enter the same email and last name you used to register</li>` +
+            `<li>Enter your hours and submit</li>` +
+          `</ol>` +
+          `<p style="margin:0">Your certificate will be downloaded automatically AND a copy emailed to you (with your parent CC'd if you provided a parent email). <strong>Need a change?</strong> If anything on the certificate needs adjustment — a misspelling, a different name format, anything at all — just reply to this email at <a href="mailto:gtaadmin2026@gmail.com" style="color:#c1272d">gtaadmin2026@gmail.com</a> and we'll be happy to accommodate.</p>` +
+        `</div>` +
+        // Section 3 — Data retention notice
+        `<div style="background:#fef3c7;border-left:4px solid #d97706;padding:12px 16px;margin:18px 0;border-radius:4px">` +
+          `<div style="font-size:11px;letter-spacing:1.5px;color:#92400e;font-weight:700">⚠️ IMPORTANT — DATA RETENTION</div>` +
+          `<p style="margin:8px 0 0;color:#78350f">To protect your privacy, the registration data we hold (names, contact info, hours) will be <strong>automatically deleted from our system in approximately ${d} days</strong> from today. Please download your certificate before then. Even after the data is deleted, you can still reach us at <a href="mailto:gtaadmin2026@gmail.com" style="color:#7a0c16;font-weight:600">gtaadmin2026@gmail.com</a> with any questions or future volunteering interest — we're always here.</p>` +
+        `</div>` +
+        // Section 4 — Looking forward
+        `<div style="background:#fff;border-left:4px solid #c1272d;padding:14px 18px;margin:18px 0;border-radius:4px">` +
+          `<div style="font-size:11px;letter-spacing:1.5px;color:#7a0c16;font-weight:700">LOOKING FORWARD</div>` +
+          `<p style="margin:8px 0 0">Thank you, once again, from the entire GTA family. As we move forward, we are incredibly excited to call on amazing volunteers like you for the events and community-service initiatives we'll be organizing <strong>in the coming months</strong>. Your spirit of seva is what keeps our community strong and our culture alive. We cannot wait to serve alongside you again soon.</p>` +
+        `</div>` +
+        // Sign-off
+        `<p style="margin:24px 0 0">With deep gratitude,<br><strong>Global Telangana Association — Atlanta</strong><br>` +
+        `<a href="mailto:gtaadmin2026@gmail.com" style="color:#c1272d">gtaadmin2026@gmail.com</a><br>` +
+        `<a href="https://www.gtaatlanta.org" style="color:#c1272d">www.gtaatlanta.org</a></p>` +
+      `</div>` +
+    `</div>`
+  );
+}
+
+/* ---------- SAFE TEST: sends one preview to the test recipient only ---------- */
+function testPostEventThankYou() {
+  // ===== Diagnostic block: tell us WHO is actually running this script =====
+  let activeUser  = '(unknown)';
+  let effectiveUser = '(unknown)';
+  let aliases = [];
+  try { activeUser    = Session.getActiveUser().getEmail();    } catch (e) { Logger.log('activeUser error: '    + e); }
+  try { effectiveUser = Session.getEffectiveUser().getEmail(); } catch (e) { Logger.log('effectiveUser error: ' + e); }
+  try { aliases       = GmailApp.getAliases();                 } catch (e) { Logger.log('aliases error: '       + e); }
+  Logger.log('==================== IDENTITY CHECK ====================');
+  Logger.log('Active user (logged-in user):    ' + activeUser);
+  Logger.log('Effective user (script owner):   ' + effectiveUser);
+  Logger.log('Aliases on the EFFECTIVE user:   ' + JSON.stringify(aliases));
+  Logger.log('Target From: address:            ' + POST_EVENT_CONFIG.fromEmail);
+  Logger.log('========================================================');
+
+  // Decide how to send:
+  //   (1) If the effective user IS already gtaadmin2026, no alias needed —
+  //       MailApp sends from the script owner automatically.
+  //   (2) Else if gtaadmin2026 is set up as an alias on the owner, use it.
+  //   (3) Else log a clear WARNING and send from whatever the owner address is.
+  const options = {
+    name: POST_EVENT_CONFIG.fromName,
+    htmlBody: buildPostEventHtml()
+  };
+
+  let strategy;
+  if (effectiveUser.toLowerCase() === POST_EVENT_CONFIG.fromEmail.toLowerCase()) {
+    strategy = '✅ STRATEGY 1: script owner IS ' + POST_EVENT_CONFIG.fromEmail + ' — no alias needed. Email will be sent FROM gtaadmin2026.';
+  } else if (aliases.indexOf(POST_EVENT_CONFIG.fromEmail) > -1) {
+    options.from = POST_EVENT_CONFIG.fromEmail;
+    strategy = '✅ STRATEGY 2: using verified alias ' + POST_EVENT_CONFIG.fromEmail + ' on owner ' + effectiveUser;
+  } else {
+    strategy = '⚠️ STRATEGY 3 (FALLBACK): owner is ' + effectiveUser + ' and ' + POST_EVENT_CONFIG.fromEmail + ' is NOT in their aliases. Email will go FROM ' + effectiveUser + '. To fix: either transfer Apps Script ownership to ' + POST_EVENT_CONFIG.fromEmail + ' AND run the script as that account, or set up ' + POST_EVENT_CONFIG.fromEmail + ' as a "Send mail as" alias on ' + effectiveUser;
+  }
+  Logger.log(strategy);
+
+  MailApp.sendEmail(POST_EVENT_CONFIG.testRecipient,
+    '[TEST] Post-event thank-you preview',
+    buildPostEventPlain(),
+    options);
+  Logger.log('Test post-event email sent to ' + POST_EVENT_CONFIG.testRecipient);
+  Logger.log('Open the test email and click the sender to see the actual From: address Gmail recorded.');
+  return strategy;
+}
+
+/* ---------- ADMIN HELPER: clear post-event stamps for a re-run ---------- */
+function clearPostEventSendStamps() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const all = sheet.getDataRange().getValues();
+  const col = all[0].indexOf('Post-event Email Sent');
+  if (col < 0) return 'No "Post-event Email Sent" column found.';
+  for (let i = 1; i < all.length; i++) sheet.getRange(i + 1, col + 1).setValue('');
+  SpreadsheetApp.flush();
+  return 'Cleared all post-event send stamps. Next sendPostEventThankYou() run will re-include those rows.';
+}
+
+/* ============================================================
+   PII RETENTION WIPE — June 14, 2026 at 2:00 AM ET
+   --------------------------------------------------------------
+   GDPR / COPPA-friendly anonymization. After 7 days, every PII
+   field is wiped or anonymized so the sheet preserves AGGREGATE
+   reporting value (school participation counts, hours totals,
+   role distribution) without retaining any way to identify
+   individual volunteers.
+
+   FIELDS WIPED (set to blank or generic value):
+     - Date of Birth, Student ID
+     - Student Email, Student Phone
+     - Parent/Guardian Name, Parent Email, Parent Phone, Relationship
+     - Emergency Contact Name, Emergency Contact Phone
+     - Allergies, Medical Conditions, Medications
+     - Volunteer Notes (may contain personal anecdotes)
+     - Check-in Token, Deletion Token (no longer needed once anonymized)
+     - Checked In By, Checked Out By (admin names, conservative wipe)
+
+   FIELDS ANONYMIZED (replaced with initials):
+     - First Name → first initial + "."     (e.g. "Priya" → "P.")
+     - Last Name  → first initial + "."     (e.g. "Reddy" → "R.")
+     - Submission ID → kept as-is (already an opaque ID, no PII)
+
+   FIELDS KEPT (aggregate value, not PII):
+     - Submitted At, Activity Date
+     - School Name, Grade Level
+     - Volunteer Role, Organization, Hours Pledged
+     - Supervisor Name/Contact, Description
+     - Actual Hours Completed, Hours Submitted At, Hours Receipt ID
+     - Is Student?, Adult/Parent Consent flags
+     - Checked In At, Checked Out At, Verified Duration, Hours Status
+     - Assigned Team, all email-sent timestamps
+
+   IDEMPOTENT: each row gets stamped with "PII Wiped At" timestamp;
+   subsequent runs skip already-wiped rows.
+   ============================================================ */
+
+const PII_WIPE_CONFIG = {
+  // Scheduled run time — June 14, 2026 at 2:00 AM Eastern Time.
+  scheduledYear: 2026,
+  scheduledMonth: 5,         // 0-indexed → 5 = June
+  scheduledDay: 14,
+  scheduledHour: 2,
+  scheduledMinute: 0,
+  scheduledTimezone: 'America/New_York'
+};
+
+function wipePiiForRetention() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  ensureHeaders(sheet);
+  const all = sheet.getDataRange().getValues();
+  if (all.length < 2) {
+    Logger.log('No rows to wipe.');
+    return 'No rows on file.';
+  }
+
+  const headers = all[0];
+  const idx = (n) => headers.indexOf(n);
+
+  // Columns to BLANK
+  const blankCols = [
+    'Date of Birth', 'Student ID',
+    'Student Email', 'Student Phone',
+    'Parent/Guardian Name', 'Parent Email', 'Parent Phone', 'Relationship',
+    'Emergency Contact Name', 'Emergency Contact Phone',
+    'Allergies', 'Medical Conditions', 'Medications',
+    'Volunteer Notes',
+    'Check-in Token', 'Deletion Token',
+    'Checked In By', 'Checked Out By'
+  ].map(idx).filter(i => i >= 0);
+
+  // Columns to ANONYMIZE (transform fn)
+  const initial = (s) => {
+    const t = String(s || '').trim();
+    return t ? (t.charAt(0).toUpperCase() + '.') : '';
+  };
+  const anonCols = [
+    { col: idx('First Name'), fn: initial },
+    { col: idx('Last Name'),  fn: initial }
+  ].filter(o => o.col >= 0);
+
+  const cWiped = idx('PII Wiped At');
+  if (cWiped < 0) {
+    throw new Error('Sheet is missing "PII Wiped At" column. Save the latest backend so ensureHeaders adds it.');
+  }
+
+  let wiped = 0;
+  let skipped = 0;
+  const ts = new Date().toLocaleString();
+
+  for (let i = 1; i < all.length; i++) {
+    const r = all[i];
+    const rowNum = i + 1;
+    if (String(r[cWiped] || '').trim()) {
+      skipped++;
+      continue;   // already wiped on a prior run
+    }
+
+    // Blank out the PII columns
+    blankCols.forEach(function(c) {
+      sheet.getRange(rowNum, c + 1).setValue('');
+    });
+    // Anonymize the name columns
+    anonCols.forEach(function(o) {
+      sheet.getRange(rowNum, o.col + 1).setValue(o.fn(r[o.col]));
+    });
+    // Stamp the wipe timestamp
+    sheet.getRange(rowNum, cWiped + 1).setValue(ts);
+    // Visual cue: tint the row light gray to flag "anonymized"
+    sheet.getRange(rowNum, 1, 1, headers.length).setBackground('#f3f4f6');
+    wiped++;
+  }
+  SpreadsheetApp.flush();
+
+  const summary = `PII retention wipe complete: wiped=${wiped} skippedAlreadyWiped=${skipped} at ${ts}`;
+  Logger.log(summary);
+  return summary;
+}
+
+/* ---------- TRIGGER SETUP ---------- */
+function setupPiiWipeTrigger() {
+  const c = PII_WIPE_CONFIG;
+  // Remove any existing trigger for this handler to avoid duplicates
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'wipePiiForRetention') {
+      ScriptApp.deleteTrigger(t);
+      Logger.log('Removed existing PII-wipe trigger.');
+    }
+  });
+
+  const target = new Date(c.scheduledYear, c.scheduledMonth, c.scheduledDay, c.scheduledHour, c.scheduledMinute, 0);
+  if (target.getTime() < new Date().getTime()) {
+    throw new Error('Target time ' + target.toString() + ' is in the past. Edit PII_WIPE_CONFIG.');
+  }
+  ScriptApp.newTrigger('wipePiiForRetention')
+    .timeBased()
+    .at(target)
+    .inTimezone(c.scheduledTimezone)
+    .create();
+  const summary = 'PII wipe scheduled for ' + target.toLocaleString() + ' (' + c.scheduledTimezone + '). Runs ONCE.';
+  Logger.log(summary);
+  return summary;
+}
+
+/* ---------- DRY-RUN PREVIEW (no changes written) ---------- */
+function previewPiiWipe() {
+  // Logs what WOULD be wiped without actually modifying the sheet.
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  ensureHeaders(sheet);
+  const all = sheet.getDataRange().getValues();
+  const headers = all[0];
+  const idx = (n) => headers.indexOf(n);
+  const cWiped = idx('PII Wiped At');
+  let eligible = 0, alreadyWiped = 0;
+  for (let i = 1; i < all.length; i++) {
+    if (String(all[i][cWiped] || '').trim()) alreadyWiped++;
+    else eligible++;
+  }
+  const summary = 'DRY RUN: rows that WOULD be wiped on next run: ' + eligible + '. Already-wiped (will be skipped): ' + alreadyWiped + '. No changes were made.';
+  Logger.log(summary);
+  return summary;
 }
 
 /* ============================================================
@@ -1057,15 +1944,12 @@ function handleEmailCertificate(data) {
   if (!email || !last) {
     return jsonResponse({ status: 'error', message: 'Missing email or last name.' });
   }
-  if (!data.pdfBase64) {
-    return jsonResponse({ status: 'error', message: 'Missing PDF certificate.' });
-  }
-  // Rate-limit: max 3 cert emails per volunteer per hour (handles legit retries)
-  if (!checkRateLimit('cert:' + email, 3, 3600)) {
+  // 10 cert-email sends per volunteer per hour (was 3 — too tight for testing/retries)
+  if (!checkRateLimit('cert:' + email, 10, 3600)) {
     return jsonResponse({ status: 'error', message: 'Certificate email rate-limited. Wait a few minutes and try again.' });
   }
 
-  // Look up the matching row to grab the parent email + name fields
+  // Look up the matching row to grab the parent email + name + role fields
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   ensureHeaders(sheet);
   const all = sheet.getDataRange().getValues();
@@ -1077,11 +1961,17 @@ function handleEmailCertificate(data) {
   const cFirst  = headers.indexOf('First Name');
   const cParent = headers.indexOf('Parent Email');
   const cHours  = headers.indexOf('Actual Hours Completed');
+  const cRole   = headers.indexOf('Volunteer Role');
+  const cSchool = headers.indexOf('School Name');
 
+  // Adult volunteers register with their email in the Parent Email column
+  // (no student email), so we match on EITHER column.
   let matchIdx = -1;
   for (let i = all.length - 1; i >= 1; i--) {
-    if (String(all[i][cEmail] || '').toLowerCase().trim() === email &&
-        String(all[i][cLast]  || '').toLowerCase().trim() === last) { matchIdx = i; break; }
+    const rowStudentEmail = cEmail  >= 0 ? String(all[i][cEmail]  || '').toLowerCase().trim() : '';
+    const rowParentEmail  = cParent >= 0 ? String(all[i][cParent] || '').toLowerCase().trim() : '';
+    const rowLast = String(all[i][cLast] || '').toLowerCase().trim();
+    if (rowLast === last && (rowStudentEmail === email || rowParentEmail === email)) { matchIdx = i; break; }
   }
   if (matchIdx === -1) {
     return jsonResponse({ status: 'error', message: 'No matching registration found.' });
@@ -1091,57 +1981,92 @@ function handleEmailCertificate(data) {
   const lastName   = String(all[matchIdx][cLast]  || '');
   const parentEmail = cParent >= 0 ? String(all[matchIdx][cParent] || '').toLowerCase().trim() : '';
   const hours      = String(all[matchIdx][cHours] || '');
+  const role       = cRole   >= 0 ? String(all[matchIdx][cRole]   || '') : '';
+  const school     = cSchool >= 0 ? String(all[matchIdx][cSchool] || '') : '';
 
-  // Decode the base64 PDF into a Blob attachment
-  let pdfBlob;
-  try {
-    const bytes = Utilities.base64Decode(data.pdfBase64);
-    pdfBlob = Utilities.newBlob(bytes, 'application/pdf', data.pdfFilename || 'GTA_Volunteer_Certificate.pdf');
-  } catch (e) {
-    return jsonResponse({ status: 'error', message: 'Could not decode certificate PDF: ' + e.toString() });
+  // Decode the base64 PDF into a Blob attachment (optional — if missing, we
+  // still send a confirmation email, just without the cert attached)
+  let pdfBlob = null;
+  if (data.pdfBase64) {
+    try {
+      const bytes = Utilities.base64Decode(data.pdfBase64);
+      pdfBlob = Utilities.newBlob(bytes, 'application/pdf', data.pdfFilename || 'GTA_Volunteer_Certificate.pdf');
+    } catch (e) {
+      Logger.log('Cert PDF decode failed (sending email without attachment): ' + e.toString());
+    }
   }
 
-  // Compose the email
-  const subject = `Your GTA Volunteer Certificate — ${hours} hours · ${firstName} ${lastName}`;
+  // Compose the consolidated confirmation email — thank-you + appreciation +
+  // verification details + (optional) PDF certificate
+  const appreciation = String(data.appreciation || '').trim();
+  const subject = `✓ Hours confirmed — ${hours} hrs · GTA International Fest · ${firstName} ${lastName}`;
   const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
+
   const plainBody =
     `${greeting}\n\n` +
-    `Thank you for volunteering at the GTA International Fest! Your personalized volunteer certificate ` +
-    `is attached to this email for your records.\n\n` +
-    `Hours verified: ${hours}\n` +
-    `Receipt ID: ${data.receiptId || '—'}\n\n` +
-    `Please show this certificate to your school counselor or community-service coordinator. ` +
+    `Thank you for volunteering at the GTA International Fest! Your hours have been verified and locked into our records.\n\n` +
+    `${appreciation ? appreciation + '\n\n' : ''}` +
+    `─────────────────────────────\n` +
+    `Hours verified:   ${hours}\n` +
+    (role   ? `Volunteer role:   ${role}\n`   : '') +
+    (school ? `School:           ${school}\n` : '') +
+    `Receipt ID:       ${data.receiptId || '—'}\n` +
+    `─────────────────────────────\n\n` +
+    (pdfBlob ? `Your personalized GTA volunteer certificate is attached to this email. ` : `(Your certificate PDF will arrive separately.) `) +
+    `Please show it to your school counselor or community-service coordinator. ` +
     `If anyone needs to verify the hours, they can contact the Global Telangana Association volunteer coordinator.\n\n` +
+    (parentEmail && parentEmail !== email ? `A copy of this email has been sent to your parent/guardian (${parentEmail}).\n\n` : '') +
     `Warm regards,\n` +
     `Global Telangana Association — Atlanta\n` +
     `www.gtaatlanta.org`;
+
   const htmlBody =
-    `<p>${greeting}</p>` +
-    `<p>Thank you for volunteering at the <strong>GTA International Fest</strong>! Your personalized volunteer certificate is attached to this email for your records.</p>` +
-    `<table style="border-collapse:collapse;margin:14px 0">` +
-      `<tr><td style="padding:6px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>Hours verified</strong></td><td style="padding:6px 14px;border:1px solid #e5e7eb">${hours}</td></tr>` +
-      `<tr><td style="padding:6px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>Receipt ID</strong></td><td style="padding:6px 14px;border:1px solid #e5e7eb">${data.receiptId || '—'}</td></tr>` +
-    `</table>` +
-    `<p>Please show this certificate to your school counselor or community-service coordinator. ` +
-    `If anyone needs to verify the hours, they can contact the Global Telangana Association volunteer coordinator.</p>` +
-    `<p>Warm regards,<br><strong>Global Telangana Association — Atlanta</strong><br>` +
-    `<a href="https://www.gtaatlanta.org">www.gtaatlanta.org</a></p>`;
+    `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:600px;color:#1f2937">` +
+    `<div style="background:linear-gradient(135deg,#7a0c16,#c1272d);color:#fff;padding:18px 22px;border-radius:10px 10px 0 0">` +
+      `<div style="font-size:13px;letter-spacing:1px;opacity:0.85">GLOBAL TELANGANA ASSOCIATION · ATLANTA</div>` +
+      `<div style="font-size:20px;font-weight:800;margin-top:4px">✓ Volunteer Hours Confirmed</div>` +
+    `</div>` +
+    `<div style="background:#fff8ec;padding:22px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px">` +
+      `<p>${greeting}</p>` +
+      `<p>Thank you for volunteering at the <strong>GTA International Fest</strong>! Your hours have been verified and locked into our records.</p>` +
+      (appreciation ? `<div style="background:#fffbeb;border-left:4px solid #d4a437;padding:12px 16px;margin:14px 0;font-style:italic;color:#78350f">${appreciation}</div>` : '') +
+      `<table style="border-collapse:collapse;margin:14px 0;width:100%">` +
+        `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb;width:40%"><strong>Hours verified</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb"><strong style="color:#059669;font-size:18px">${hours}</strong></td></tr>` +
+        (role   ? `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>Volunteer role</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb">${role}</td></tr>` : '') +
+        (school ? `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>School</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb">${school}</td></tr>` : '') +
+        `<tr><td style="padding:8px 14px;border:1px solid #e5e7eb;background:#f9fafb"><strong>Receipt ID</strong></td><td style="padding:8px 14px;border:1px solid #e5e7eb;font-family:monospace;font-size:12px">${data.receiptId || '—'}</td></tr>` +
+      `</table>` +
+      (pdfBlob
+        ? `<div style="background:#d1fae5;border-left:4px solid #059669;padding:12px 16px;margin:14px 0;border-radius:4px"><strong>📎 Your personalized GTA volunteer certificate is attached.</strong> Please show it to your school counselor or community-service coordinator.</div>`
+        : `<div style="background:#fef3c7;border-left:4px solid #d97706;padding:12px 16px;margin:14px 0;border-radius:4px">Your certificate PDF will arrive separately.</div>`
+      ) +
+      `<p style="color:#6b7280;font-size:13px">If anyone needs to verify the hours, they can contact the Global Telangana Association volunteer coordinator.</p>` +
+      (parentEmail && parentEmail !== email
+        ? `<p style="color:#6b7280;font-size:12px;margin-top:18px;padding-top:12px;border-top:1px solid #e5e7eb">A copy of this email has been sent to your parent/guardian at <strong>${parentEmail}</strong>.</p>`
+        : '') +
+      `<p style="margin-top:20px">Warm regards,<br><strong>Global Telangana Association — Atlanta</strong><br>` +
+      `<a href="https://www.gtaatlanta.org" style="color:#c1272d">www.gtaatlanta.org</a></p>` +
+    `</div>` +
+    `</div>`;
 
   const options = {
     name: 'Global Telangana Association',
-    htmlBody: htmlBody,
-    attachments: [pdfBlob]
+    htmlBody: htmlBody
   };
+  if (pdfBlob) options.attachments = [pdfBlob];
+  // CC the parent if a parent email was entered AND it's different from the
+  // primary recipient (in adult mode the "parent email" IS the volunteer's
+  // own email, so we don't want to CC them to themselves).
   if (parentEmail && parentEmail !== email && parentEmail.indexOf('@') > -1) {
     options.cc = parentEmail;
   }
 
   try {
     MailApp.sendEmail(email, subject, plainBody, options);
-    Logger.log('Cert email sent: to=' + email + ' cc=' + (options.cc || '(none)') + ' quotaRemaining=' + MailApp.getRemainingDailyQuota());
-    return jsonResponse({ status: 'ok', sentTo: email, cc: options.cc || '' });
+    Logger.log('Confirmation email sent: to=' + email + ' cc=' + (options.cc || '(none)') + ' attachment=' + (pdfBlob ? 'yes' : 'no') + ' quotaRemaining=' + MailApp.getRemainingDailyQuota());
+    return jsonResponse({ status: 'ok', sentTo: email, cc: options.cc || '', attachmentSent: !!pdfBlob });
   } catch (e) {
-    Logger.log('Cert email failed: ' + e.toString());
+    Logger.log('Confirmation email failed: ' + e.toString());
     return jsonResponse({ status: 'error', message: 'Email send failed: ' + e.toString() });
   }
 }
