@@ -461,8 +461,13 @@
         try {
           const c = document.createElement('canvas');
           c.width = img.naturalWidth; c.height = img.naturalHeight;
-          c.getContext('2d').drawImage(img, 0, 0);
-          resolve({ dataUrl: c.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight });
+          const g = c.getContext('2d');
+          g.fillStyle = '#ffffff';
+          g.fillRect(0, 0, c.width, c.height);
+          g.drawImage(img, 0, 0);
+          // JPEG keeps the finished PDF around 0.3 MB. Embedding the PNG made a
+          // 7 MB file, which is too large to send through the backend.
+          resolve({ dataUrl: c.toDataURL('image/jpeg', 0.95), w: img.naturalWidth, h: img.naturalHeight });
         } catch (e) { resolve(null); }
       };
       img.onerror = function() { resolve(null); };
@@ -483,8 +488,8 @@
     if (!tpl) { tplPromise = null; throw new Error('The certificate design did not load. Check your connection and reload the page.'); }
     const jsPDF = window.jspdf.jsPDF;
     const pdfW = 800, pdfH = pdfW / (tpl.w / tpl.h);
-    const doc = new jsPDF({ unit: 'pt', format: [pdfW, pdfH], orientation: 'landscape' });
-    doc.addImage(tpl.dataUrl, 'PNG', 0, 0, pdfW, pdfH);
+    const doc = new jsPDF({ unit: 'pt', format: [pdfW, pdfH], orientation: 'landscape', compress: true });
+    doc.addImage(tpl.dataUrl, 'JPEG', 0, 0, pdfW, pdfH);
     // Name sits on the blank line of the template; long names shrink to fit the line.
     doc.setFont('times', 'bolditalic');
     doc.setTextColor(31, 41, 55);
@@ -499,7 +504,9 @@
     doc.text('Issued by Global Telangana Association — Atlanta · ' + new Date().toLocaleDateString(), pdfW / 2, pdfH - 8, { align: 'center' });
     const filename = 'GTA_Cultural_Certificate_' + fullName.replace(/[^A-Za-z0-9]+/g, '_') + '.pdf';
     const dataUri = doc.output('datauristring');
-    return { doc: doc, filename: filename, base64: dataUri.substring(dataUri.indexOf(',') + 1) };
+    const base64 = dataUri.substring(dataUri.indexOf(',') + 1);
+    if (base64.length > 6000000) throw new Error('The certificate file came out too large to send. Please reload the page and try again.');
+    return { doc: doc, filename: filename, base64: base64 };
   }
 
   async function previewCertificate() {
