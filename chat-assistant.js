@@ -16,7 +16,7 @@ const SYSTEM_PROMPT = `You are a friendly, warm assistant helping students and a
 
 Event facts:
 - Bathukamma is Telangana's festival of flowers.
-- Date: Saturday, October 17, 2026. Volunteer window: 11:00 AM – 10:00 PM EST.
+- Date: Saturday, October 17, 2026. Volunteer hours: 9:00 AM – 10:00 PM EST.
 - Venue: Denmark High School (indoors). The GTA team emails each volunteer's assignment before the event.
 
 Your job:
@@ -29,7 +29,7 @@ Important context:
 - The form asks only for: student or adult, name, (students: grade, school, parent/guardian name), email, phone, preferred shift, hours, preferred area, and optional allergy/medical notes.
 - This form is run by GTA, NOT by the student's school. School is asked only so GTA knows where volunteers come from.
 - Parent/guardian consent is REQUIRED for every student volunteer; the parent's email is verified with a 6-digit code and the parent's phone is the emergency contact.
-- "Hours" is an estimate of how many hours the volunteer can help (the event runs 11 hours; any amount is welcome).
+- "Hours" is an estimate of how many hours the volunteer can help (volunteer hours run 9 AM – 10 PM; any amount is welcome).
 - On event day a GTA admin scans the volunteer's QR code (from the confirmation email) at arrival and departure; hours and the certificate are based on those scans.
 
 If someone asks something off-topic (homework, personal advice, inappropriate content), kindly redirect them to the form or to their parent/teacher. Never collect personal info beyond what the form asks for. If asked something specific you do not know (program schedule, parking details), say the GTA team will share full details by email after sign-up.`;
@@ -45,7 +45,7 @@ const BUILTIN_FAQ = [
   },
   {
     triggers: ['bathukamma', 'festival', 'event', 'when', 'date', 'what is the event'],
-    answer: "GTA Bathukamma 2026 is on Saturday, October 17, 2026, 11 AM – 10 PM EST. Bathukamma is Telangana's festival of flowers. It is held indoors at Denmark High School. The GTA team will email your assignment before the event."
+    answer: "GTA Bathukamma 2026 is on Saturday, October 17, 2026. Volunteer hours are 9 AM – 10 PM EST. Bathukamma is Telangana's festival of flowers. It is held indoors at Denmark High School. The GTA team will email your assignment before the event."
   },
   {
     triggers: ['parent', 'consent', 'guardian', 'permission'],
@@ -57,7 +57,7 @@ const BUILTIN_FAQ = [
   },
   {
     triggers: ['hours', 'how many hours', 'time', 'how long'],
-    answer: "Enter how many hours you can volunteer (whole or half hours) and pick the time of day that suits you. The event runs 11 AM – 10 PM EST; any amount helps."
+    answer: "Enter how many hours you can volunteer (whole or half hours) and pick the time of day that suits you. Volunteer hours run 9 AM – 10 PM EST; any amount helps."
   },
   {
     triggers: ['supervisor', 'who is supervisor', 'supervisor contact'],
