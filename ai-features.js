@@ -303,7 +303,7 @@ JSON:`;
   if (!desc || !roleSelect) return;
   if (!hasGroqKey()) return;
 
-  const ROLE_LIST = ['Registration desk', 'Cultural program help', 'Food service', 'Stage crew', 'Parking', 'Other'];
+  const ROLE_LIST = ['Anywhere needed', 'Registration & check-in desk', 'Food service', 'Water & refreshments', 'Stage support', 'Cultural program support', 'Bathukamma receiving & transport', 'Bathukamma line formation', 'Nimajjanam (immersion) support', 'Parking & traffic'];
 
   // Build a recommendation panel below the description field
   const panel = document.createElement('div');

@@ -564,6 +564,7 @@
     .choice-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .choice-row .toggle-radio { justify-content: center; padding: 13px 10px; font-weight: 600; }
     .choice-row .toggle-radio:has(input:checked) { border-color: var(--fest-red); background: #fff8ec; }
+    .flex-note { background: #fff8ec; border-left: 3px solid var(--fest-gold); padding: 8px 10px; border-radius: 6px; color: #78350f; margin-top: 8px; }
     .privacy-mini { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
     .privacy-mini summary { cursor: pointer; color: var(--fest-red); font-weight: 600; }
     .privacy-mini ul { margin: 8px 0 0; padding-left: 20px; }
@@ -1137,13 +1138,17 @@
           <label for="activityName">Where would you like to help?</label>
           <select id="activityName" name="activityName">
             <option>Anywhere needed</option>
-            <option>Registration desk</option>
-            <option>Cultural program help</option>
+            <option>Registration &amp; check-in desk</option>
             <option>Food service</option>
-            <option>Stage crew</option>
-            <option>Parking</option>
+            <option>Water &amp; refreshments</option>
+            <option>Stage support</option>
+            <option>Cultural program support</option>
+            <option>Bathukamma receiving &amp; transport</option>
+            <option>Bathukamma line formation</option>
+            <option>Nimajjanam (immersion) support</option>
+            <option>Parking &amp; traffic</option>
           </select>
-          <p class="helper">Final assignments depend on turnout on the day.</p>
+          <p class="helper flex-note"><strong>Please note:</strong> this is your preference. Final assignments are made on the day based on where help is needed most, so we ask every volunteer to be flexible.</p>
         </div>
         <div class="field">
           <label for="allergies">Allergies or medical needs we should know about <span class="helper" style="font-weight: 400;">(optional)</span></label>

@@ -21,7 +21,7 @@ Event facts:
 
 Your job:
 - Help people complete the short sign-up form and explain what each field means
-- Explain what kinds of volunteer roles are available (registration desk, cultural program help, food service, stage crew, parking)
+- Explain what kinds of volunteer roles are available (registration & check-in desk, food service, water & refreshments, stage support, cultural program support, Bathukamma receiving & transport, Bathukamma line formation, Nimajjanam/immersion support, parking & traffic). The choice is a preference only: final assignments are made on the day based on where help is needed, so volunteers should be flexible
 - Be encouraging — many student volunteers are volunteering for the first time
 - Keep answers SHORT (1-3 sentences max), warm, and age-appropriate
 
@@ -53,7 +53,7 @@ const BUILTIN_FAQ = [
   },
   {
     triggers: ['role', 'roles', 'what can i do', 'what will i do', 'job', 'task'],
-    answer: "Volunteer areas include the registration desk, cultural program help, food service, stage crew, and parking. Pick one under 'Where would you like to help?' or leave it as 'Anywhere needed'."
+    answer: "Volunteer areas include the registration desk, food service, water and refreshments, stage support, the cultural program, Bathukamma receiving and transport, Bathukamma line formation, Nimajjanam (immersion) support, and parking. Pick your preference under 'Where would you like to help?' — final assignments are made on the day based on where help is needed, so please be flexible."
   },
   {
     triggers: ['hours', 'how many hours', 'time', 'how long'],
