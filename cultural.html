@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#c1272d" />
+<meta name="robots" content="noindex" />
+<title>GTA Cultural Participation Certificates</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #c1272d; --primary-dark: #8b0e1a; --success: #198754; --danger: #dc3545;
+    --bg: #fff8ec; --card: #ffffff; --text: #1f2937; --muted: #6b7280; --border: #e5e7eb;
+    --shadow: 0 4px 14px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header { background: linear-gradient(135deg, var(--primary), #ff6b35); color: white; padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: var(--shadow); }
+  header h1 { margin: 0; font-size: 17px; font-weight: 700; }
+  header .meta { font-size: 12px; opacity: 0.9; }
+  header button { padding: 6px 12px; background: rgba(255,255,255,0.2); color: white;
+    border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  main { max-width: 620px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--card); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .card h2 { margin: 0 0 12px; font-size: 16px; color: var(--primary-dark); }
+
+  #lockScreen { position: fixed; inset: 0; background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    display: flex; align-items: center; justify-content: center; z-index: 9999; }
+  .lock-card { background: white; border-radius: 16px; padding: 32px 26px; width: 360px; max-width: calc(100vw - 32px);
+    text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .lock-card .icon { width: 64px; height: 64px; margin: 0 auto 14px; background: var(--primary); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 30px; }
+  .lock-card h2 { margin: 0 0 6px; font-size: 18px; }
+  .lock-card p { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+  .lock-card input { width: 100%; padding: 12px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+  .lock-card button { width: 100%; padding: 12px; font-size: 15px; font-weight: 600; background: var(--primary); color: white;
+    border: none; border-radius: 8px; cursor: pointer; }
+  .lock-card .err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+  label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+  label .opt { font-weight: 400; color: var(--muted); font-size: 12px; }
+  input[type="text"], input[type="email"] { width: 100%; padding: 13px 12px; font-size: 16px; border: 1px solid var(--border);
+    border-radius: 8px; font-family: inherit; }
+  input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(193,39,45,0.15); }
+  .helper { font-size: 12px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+
+  #micBtn { width: 100%; padding: 14px; border: none; border-radius: 8px; background: var(--primary); color: white;
+    font-weight: 700; font-size: 16px; cursor: pointer; }
+  #micBtn.listening { background: #ea580c; animation: mic-pulse 1.1s ease-in-out infinite; }
+  #micBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+  @keyframes mic-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(234,88,12,0.5); } 50% { box-shadow: 0 0 0 10px rgba(234,88,12,0); } }
+  .or { text-align: center; font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+
+  .match { display: block; width: 100%; text-align: left; padding: 11px 12px; margin-top: 6px; background: white;
+    border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 14px; cursor: pointer; color: var(--text); }
+  .match:hover { border-color: var(--primary); background: #fff8ec; }
+  .match small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .picked { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
+  .picked .check { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; font-size: 14px; }
+  .picked .check input { width: 20px; height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--primary); }
+  .picked .check label { margin: 0; font-weight: 500; }
+  .countdown { background: #fff8ec; border: 2px solid var(--primary); border-radius: 8px; padding: 12px; margin-top: 12px; font-size: 14px; line-height: 1.5; }
+  .countdown button { margin-top: 8px; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border); background: white; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .linkbtn { background: none; border: none; color: var(--primary); text-decoration: underline; cursor: pointer; font-size: 13px; padding: 0; }
+
+  .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .actions button { flex: 1; padding: 14px; font-size: 15px; font-weight: 700; border-radius: 8px; cursor: pointer; }
+  .btn-primary { background: var(--success); color: white; border: none; }
+  .btn-secondary { background: white; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+
+  .status { padding: 12px 14px; border-radius: 8px; font-size: 14px; font-weight: 500; margin-bottom: 14px; display: none; }
+  .status.success { background: #d1fae5; color: #065f46; display: block; }
+  .status.error { background: #fee2e2; color: #991b1b; display: block; }
+  .sent-row { padding: 9px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .sent-row:last-child { border-bottom: none; }
+  .sent-row .to { color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; }
+  .empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ============ LOCK SCREEN ============ -->
+<div id="lockScreen">
+  <form class="lock-card" id="lockForm">
+    <div class="icon">🎭</div>
+    <h2>Cultural Participation Certificates</h2>
+    <p>For the GTA cultural program admin. Enter your name and the PIN you were given.</p>
+    <input type="text" id="adminNameInput" placeholder="Your name" autocomplete="name" />
+    <input type="password" id="pinInput" placeholder="PIN" autocomplete="off" />
+    <button type="submit">Unlock</button>
+    <div class="err" id="lockErr"></div>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="appContent" style="display: none;">
+  <header>
+    <h1>🎭 Cultural Certificates</h1>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="meta" id="adminMeta">—</span>
+      <button onclick="logout()">Lock</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="statusBanner" class="status"></div>
+
+    <!-- Step 1: who -->
+    <div class="card" id="formCard">
+      <h2>1. Who is the certificate for?</h2>
+      <button type="button" id="micBtn" onclick="toggleVoice()">🎤 Say the name</button>
+      <p class="or">…or type it</p>
+
+      <label for="firstName">First name</label>
+      <input type="text" id="firstName" autocomplete="off" autocapitalize="words" />
+      <label for="lastName">Last name</label>
+      <input type="text" id="lastName" autocomplete="off" autocapitalize="words" />
+      <p class="helper" id="voiceHint">The name is printed on the certificate exactly as it appears here. Please check the spelling.</p>
+
+      <div id="matches"></div>
+      <div id="pickedBox"></div>
+
+      <h2 style="margin-top: 22px;">2. Where should it be sent?</h2>
+      <label for="participantEmail">Participant's email <span class="opt">(optional)</span></label>
+      <input type="email" id="participantEmail" autocomplete="off" inputmode="email" placeholder="name@gmail.com" />
+      <label for="parentEmail">Parent's email <span class="opt">(optional)</span></label>
+      <input type="email" id="parentEmail" autocomplete="off" inputmode="email" placeholder="parent@gmail.com" />
+      <p class="helper">Fill in one or both. Personal addresses (Gmail, Yahoo, Outlook) work best; school addresses often block our emails.</p>
+
+      <div class="actions">
+        <button type="button" class="btn-primary" id="sendBtn" onclick="sendNow()">Send certificate</button>
+      </div>
+      <p class="helper" style="text-align:center;margin-top:12px">The certificate is emailed straight to them. Nothing is saved on your phone.
+        <button type="button" class="linkbtn" id="previewBtn" onclick="previewCertificate()">See a preview first</button></p>
+    </div>
+
+    <div class="card">
+      <h2>Sent in this session (<span id="sentCount">0</span>)</h2>
+      <div id="sentList"><div class="empty">Nothing sent yet.</div></div>
+    </div>
+
+    <p style="text-align: center; padding: 10px; font-size: 11px; color: var(--muted);">
+      GTA Bathukamma 2026 · Every certificate sent here is recorded with your name.
+    </p>
+  </main>
+</div>
+
+<script src="config.js"></script>
+<script>
+  let currentPin = '', adminName = '';
+  let roster = [];
+  let picked = null;            // registered volunteer chosen from the list (or null)
+  let recognition = null, listening = false;
+  const sentLog = [];
+
+  const $ = function(id) { return document.getElementById(id); };
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function flash(msg, kind) {
+    const b = $('statusBanner');
+    b.className = 'status ' + (kind || 'success');
+    b.textContent = msg;
+    try { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+    if (kind !== 'error') setTimeout(function() { b.className = 'status'; }, 6000);
+  }
+
+  // ---------- backend ----------
+  async function callBackend(action, payload) {
+    const controller = new AbortController();
+    const timer = setTimeout(function() { controller.abort(); }, 60000);
+    try {
+      const res = await fetch(CONFIG.appsScriptUrl, {
+        method: 'POST', mode: 'cors', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ action: action }, payload)),
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error('Network error (' + res.status + ')');
+      const text = await res.text();
+      try { return JSON.parse(text); }
+      catch (e) { throw new Error('Unexpected reply from the server. The backend may need a new deployment.'); }
+    } finally { clearTimeout(timer); }
+  }
+
+  // ---------- lock screen ----------
+  $('lockForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const pin = $('pinInput').value.trim();
+    const name = $('adminNameInput').value.trim();
+    if (!name) { $('lockErr').textContent = 'Enter your name.'; return; }
+    if (!pin) { $('lockErr').textContent = 'Enter the PIN.'; return; }
+    $('lockErr').textContent = 'Checking…';
+    try {
+      const res = await callBackend('listCulturalRoster', { pin: pin });
+      if (!res || res.status !== 'ok') {
+        $('lockErr').textContent = /invalid pin/i.test((res && res.message) || '')
+          ? 'That PIN is not right.'
+          : ((res && res.message) || 'Could not unlock. The backend may need a new deployment.');
+        return;
+      }
+      currentPin = pin; adminName = name;
+      sessionStorage.setItem('culturalPin', pin);
+      sessionStorage.setItem('culturalAdminName', name);
+      setRoster(res.roster);
+      enterApp();
+    } catch (err) {
+      $('lockErr').textContent = 'Could not reach the server. Check your connection and try again.';
+    }
+  });
+
+  function setRoster(list) {
+    roster = (list || []).map(function(v) {
+      v._first = normName(v.firstName); v._last = normName(v.lastName); return v;
+    });
+  }
+
+  function enterApp() {
+    $('lockScreen').style.display = 'none';
+    $('appContent').style.display = 'block';
+    $('adminMeta').textContent = '👤 ' + adminName;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      $('micBtn').disabled = true;
+      $('micBtn').textContent = '🎤 Voice not supported in this browser';
+    }
+    preloadTemplate();
+  }
+
+  function logout() {
+    sessionStorage.removeItem('culturalPin');
+    sessionStorage.removeItem('culturalAdminName');
+    location.reload();
+  }
+
+  window.addEventListener('load', async function() {
+    const p = sessionStorage.getItem('culturalPin'), n = sessionStorage.getItem('culturalAdminName');
+    if (!p || !n) return;
+    currentPin = p; adminName = n;
+    enterApp();
+    try {
+      const res = await callBackend('listCulturalRoster', { pin: p });
+      if (res && res.status === 'ok') setRoster(res.roster); else logout();
+    } catch (e) { /* offline for a moment — typing still works */ }
+  });
+
+  // ---------- name matching (same approach as the check-in page) ----------
+  function normName(str) {
+    return String(str || '').toLowerCase()
+      .replace(/[^a-z ]+/g, ' ')
+      .replace(/ksh|x/g, 'ks').replace(/ph/g, 'f').replace(/[sc]h/g, 's')
+      .replace(/([tdbgkj])h/g, '$1').replace(/w/g, 'v').replace(/y\b/g, 'i')
+      .replace(/ee|ea/g, 'i').replace(/oo|ou/g, 'u').replace(/aa/g, 'a')
+      .replace(/(.)\1+/g, '$1')
+      .replace(/\s+/g, ' ').trim();
+  }
+  function editDistance(a, b) {
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n; if (!n) return m;
+    let prev = [], cur = [];
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+      cur = [i];
+      for (let j = 1; j <= n; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+  function wordScore(q, w) {
+    if (!q || !w) return 0;
+    if (q === w) return 1;
+    if (w.indexOf(q) === 0 && q.length >= 3) return 0.9;
+    return 1 - editDistance(q, w) / Math.max(q.length, w.length);
+  }
+  function scoreVolunteer(v, phrase) {
+    const qWords = phrase.split(' ').filter(String);
+    if (!qWords.length) return 0;
+    const nameWords = (v._first + ' ' + v._last).split(' ').filter(String);
+    let total = 0;
+    qWords.forEach(function(q) {
+      let best = 0;
+      nameWords.forEach(function(w) { best = Math.max(best, wordScore(q, w)); });
+      total += best;
+    });
+    let score = total / qWords.length;
+    score = Math.max(score, wordScore(qWords.join(''), nameWords.join('')));
+    return score;
+  }
+  function findMatches(phrases) {
+    const norm = phrases.map(normName).filter(function(p) { return p.length >= 3; });
+    if (!norm.length) return [];
+    const out = [];
+    roster.forEach(function(v) {
+      let best = 0;
+      norm.forEach(function(p) { best = Math.max(best, scoreVolunteer(v, p)); });
+      if (best >= 0.72) out.push({ v: v, score: best });
+    });
+    out.sort(function(a, b) { return b.score - a.score; });
+    return out.slice(0, 5);
+  }
+
+  function titleCase(s) {
+    return String(s || '').trim().replace(/\s+/g, ' ').split(' ').map(function(w) {
+      return w ? w.charAt(0).toUpperCase() + w.slice(1) : '';
+    }).join(' ');
+  }
+
+  // ---------- name entry ----------
+  let matchTimer = null;
+  ['firstName', 'lastName'].forEach(function(id) {
+    $(id).addEventListener('input', function() {
+      if (picked) clearPicked(true);
+      clearTimeout(matchTimer);
+      matchTimer = setTimeout(function() {
+        showMatches([($('firstName').value + ' ' + $('lastName').value).trim()]);
+      }, 250);
+    });
+  });
+
+  function showMatches(phrases) {
+    const box = $('matches');
+    if (picked) { box.innerHTML = ''; return; }
+    const m = findMatches(phrases);
+    if (!m.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<p class="helper" style="margin-top:14px"><strong>Registered volunteer?</strong> Tap to use the email we already have:</p>' +
+      m.map(function(x) {
+        const v = x.v;
+        return '<button type="button" class="match" data-token="' + escapeHtml(v.token) + '"><strong>' +
+          escapeHtml((v.firstName + ' ' + v.lastName).trim()) + '</strong><small>' + escapeHtml(v.detail || '') + '</small></button>';
+      }).join('');
+    box.querySelectorAll('.match').forEach(function(b) {
+      b.addEventListener('click', function() { pickVolunteer(b.getAttribute('data-token')); });
+    });
+  }
+
+  function pickVolunteer(token) {
+    const v = roster.find(function(x) { return x.token === token; });
+    if (!v) return;
+    picked = v;
+    $('firstName').value = v.firstName;
+    $('lastName').value = v.lastName;
+    $('matches').innerHTML = '';
+    let html = '<div class="picked">✓ <strong>' + escapeHtml((v.firstName + ' ' + v.lastName).trim()) +
+      '</strong> is a registered volunteer.';
+    if (v.ownEmailHint) {
+      html += '<div class="check"><input type="checkbox" id="useOwn" checked /><label for="useOwn">Send to their email on file (' + escapeHtml(v.ownEmailHint) + ')</label></div>';
+    }
+    if (v.parentEmailHint) {
+      html += '<div class="check"><input type="checkbox" id="useParent" checked /><label for="useParent">Send to the parent\'s email on file (' + escapeHtml(v.parentEmailHint) + ')</label></div>';
+    }
+    if (!v.ownEmailHint && !v.parentEmailHint) html += ' No email is on file — enter one below.';
+    html += '<div style="margin-top:8px"><button type="button" class="linkbtn" onclick="clearPicked(false)">Not this person</button></div></div>';
+    html += '<div id="countdownBox"></div>';
+    $('pickedBox').innerHTML = html;
+    if (v.ownEmailHint || v.parentEmailHint) startAutoSend();
+    else { try { $('parentEmail').focus(); } catch (e) {} }
+  }
+
+  // Registered volunteer with an email on file: send automatically after a short
+  // pause, so a wrong match or a misheard name can still be stopped.
+  let autoTimer = null;
+  function startAutoSend() {
+    stopAutoSend();
+    let left = 5;
+    const box = $('countdownBox');
+    const paint = function() {
+      box.innerHTML = '<div class="countdown">📧 Sending the certificate to the email on file in <strong>' + left +
+        '</strong> second' + (left === 1 ? '' : 's') + '…<br><button type="button" onclick="stopAutoSend(true)">Stop — I need to change something</button></div>';
+    };
+    paint();
+    autoTimer = setInterval(function() {
+      left -= 1;
+      if (left <= 0) { stopAutoSend(); sendNow(); return; }
+      paint();
+    }, 1000);
+  }
+  function stopAutoSend(byUser) {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    const box = $('countdownBox');
+    if (box) box.innerHTML = byUser ? '<p class="helper">Stopped. Make your changes, then tap "Send certificate".</p>' : '';
+  }
+
+  function clearPicked(keepName) {
+    stopAutoSend();
+    picked = null;
+    $('pickedBox').innerHTML = '';
+    if (!keepName) showMatches([($('firstName').value + ' ' + $('lastName').value).trim()]);
+  }
+
+  document.addEventListener('input', function(e) {
+    if (autoTimer && e.target && (e.target.id === 'participantEmail' || e.target.id === 'parentEmail' || e.target.id === 'useOwn' || e.target.id === 'useParent')) stopAutoSend(true);
+  });
+
+  // ---------- voice ----------
+  function toggleVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const mic = $('micBtn');
+    if (listening && recognition) { try { recognition.stop(); } catch (e) {} return; }
+    recognition = new SR();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 5;
+    recognition.onstart = function() {
+      listening = true; mic.classList.add('listening'); mic.textContent = '🔴 Listening… say first and last name';
+    };
+    recognition.onresult = function(e) {
+      const alts = [];
+      for (let i = 0; i < e.results[0].length; i++) alts.push(e.results[0][i].transcript);
+      applySpokenName(alts);
+    };
+    recognition.onerror = function(e) {
+      const msgs = {
+        'not-allowed': 'Microphone is blocked. Allow mic access for this site, or type the name.',
+        'service-not-allowed': 'Microphone is blocked. Allow mic access for this site, or type the name.',
+        'no-speech': 'Didn\'t hear anything. Tap the button and try again.',
+        'audio-capture': 'No microphone found. Type the name instead.',
+        'network': 'Voice needs an internet connection. Type the name instead.'
+      };
+      flash(msgs[e.error] || ('Voice did not work (' + e.error + '). Type the name instead.'), 'error');
+    };
+    recognition.onend = function() {
+      listening = false; mic.classList.remove('listening'); mic.textContent = '🎤 Say the name';
+    };
+    try { recognition.start(); } catch (err) { flash('Could not start the microphone. Type the name instead.', 'error'); }
+  }
+
+  function applySpokenName(alts) {
+    clearPicked(true);
+    const m = findMatches(alts);
+    const clear = m.length && m[0].score >= 0.85 && (m.length === 1 || m[0].score - m[1].score >= 0.12);
+    if (clear) { pickVolunteer(m[0].v.token); $('voiceHint').textContent = 'Found a registered volunteer. Check the name and spelling.'; return; }
+    // Not a (clear) registered volunteer: put what was heard into the boxes for her to check.
+    const heard = titleCase(String(alts[0] || '').replace(/[^A-Za-z .'-]+/g, ' '));
+    const parts = heard.split(' ').filter(String);
+    $('firstName').value = parts[0] || '';
+    $('lastName').value = parts.slice(1).join(' ');
+    $('voiceHint').textContent = 'Heard "' + heard + '". Voice often misspells names — please correct the spelling before sending.';
+    showMatches(alts);
+    if (!$('matches').innerHTML) {
+      $('voiceHint').textContent += ' Not in the volunteer list — enter an email below and tap "Send certificate".';
+      try { $('participantEmail').focus(); } catch (e) {}
+    }
+  }
+
+  // ---------- certificate PDF ----------
+  let tplPromise = null;
+  function preloadTemplate() {
+    if (tplPromise) return tplPromise;
+    tplPromise = new Promise(function(resolve) {
+      const img = new Image();
+      img.onload = function() {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          c.getContext('2d').drawImage(img, 0, 0);
+          resolve({ dataUrl: c.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight });
+        } catch (e) { resolve(null); }
+      };
+      img.onerror = function() { resolve(null); };
+      img.src = 'cert-template-cultural.png';
+    });
+    return tplPromise;
+  }
+
+  function currentName() {
+    const first = $('firstName').value.trim().replace(/\s+/g, ' ');
+    const last = $('lastName').value.trim().replace(/\s+/g, ' ');
+    return { first: first, last: last, full: (first + ' ' + last).trim() };
+  }
+
+  async function buildPdf(fullName) {
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('The certificate tool did not load. Check your connection and reload the page.');
+    const tpl = await preloadTemplate();
+    if (!tpl) { tplPromise = null; throw new Error('The certificate design did not load. Check your connection and reload the page.'); }
+    const jsPDF = window.jspdf.jsPDF;
+    const pdfW = 800, pdfH = pdfW / (tpl.w / tpl.h);
+    const doc = new jsPDF({ unit: 'pt', format: [pdfW, pdfH], orientation: 'landscape' });
+    doc.addImage(tpl.dataUrl, 'PNG', 0, 0, pdfW, pdfH);
+    // Name sits on the blank line of the template; long names shrink to fit the line.
+    doc.setFont('times', 'bolditalic');
+    doc.setTextColor(31, 41, 55);
+    let size = 24;
+    doc.setFontSize(size);
+    const maxWidth = pdfW * 0.56;
+    while (size > 12 && doc.getTextWidth(fullName) > maxWidth) { size -= 1; doc.setFontSize(size); }
+    doc.text(fullName, pdfW / 2, pdfH * 0.626, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    doc.text('Issued by Global Telangana Association — Atlanta · ' + new Date().toLocaleDateString(), pdfW / 2, pdfH - 8, { align: 'center' });
+    const filename = 'GTA_Cultural_Certificate_' + fullName.replace(/[^A-Za-z0-9]+/g, '_') + '.pdf';
+    const dataUri = doc.output('datauristring');
+    return { doc: doc, filename: filename, base64: dataUri.substring(dataUri.indexOf(',') + 1) };
+  }
+
+  async function previewCertificate() {
+    const n = currentName();
+    if (!n.first) { flash('Enter the name first.', 'error'); return; }
+    const btn = $('previewBtn');
+    btn.disabled = true; btn.textContent = 'Preparing…';
+    try {
+      const pdf = await buildPdf(n.full);
+      pdf.doc.save(pdf.filename);
+      flash('Preview downloaded to this device. Nothing has been emailed.', 'success');
+    } catch (err) { flash(err.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = 'See a preview first'; }
+  }
+
+  // ---------- send ----------
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  let sending = false;
+
+  async function sendNow() {
+    if (sending) return;
+    stopAutoSend();
+    const n = currentName();
+    if (!n.first) { flash('Enter the participant\'s name.', 'error'); return; }
+    const pEmail = $('participantEmail').value.trim(), gEmail = $('parentEmail').value.trim();
+    if (pEmail && !EMAIL_RE.test(pEmail)) { flash('The participant\'s email does not look right.', 'error'); return; }
+    if (gEmail && !EMAIL_RE.test(gEmail)) { flash('The parent\'s email does not look right.', 'error'); return; }
+    const useOwn = !!(picked && $('useOwn') && $('useOwn').checked);
+    const useParent = !!(picked && $('useParent') && $('useParent').checked);
+    if (!pEmail && !gEmail && !useOwn && !useParent) {
+      flash(picked ? 'Tick an email on file or enter an email address.' : 'This name is not in the volunteer list. Enter the participant\'s or a parent\'s email to send the certificate.', 'error');
+      try { $('participantEmail').focus(); } catch (e) {}
+      return;
+    }
+    const btn = $('sendBtn');
+    sending = true; btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const pdf = await buildPdf(n.full);
+      const res = await callBackend('sendCulturalCertificate', {
+        pin: currentPin, adminName: adminName,
+        firstName: n.first, lastName: n.last,
+        participantEmail: pEmail, parentEmail: gEmail,
+        token: picked ? picked.token : '', useOwnOnFile: useOwn, useParentOnFile: useParent,
+        pdfBase64: pdf.base64, pdfFilename: pdf.filename
+      });
+      if (!res || res.status !== 'ok') {
+        flash((res && res.message) || 'The certificate could not be sent.', 'error');
+        return;
+      }
+      sentLog.unshift({ name: res.name, to: (res.sentTo || []).length, time: new Date().toLocaleTimeString() });
+      renderSent();
+      resetForm();
+      flash('✅ Certificate sent for ' + res.name + ' to ' + (res.sentTo || []).length + ' address' + ((res.sentTo || []).length === 1 ? '' : 'es') + '.', 'success');
+    } catch (err) {
+      flash(err.name === 'AbortError'
+        ? 'This is taking too long. Check the "Cultural Certificates" tab in the Sheet before trying again, so it is not sent twice.'
+        : (err.message || 'Could not reach the server.'), 'error');
+    } finally {
+      sending = false; btn.disabled = false; btn.textContent = 'Send certificate';
+    }
+  }
+
+  function resetForm() {
+    stopAutoSend(); picked = null;
+    ['firstName', 'lastName', 'participantEmail', 'parentEmail'].forEach(function(id) { $(id).value = ''; });
+    $('matches').innerHTML = ''; $('pickedBox').innerHTML = '';
+    $('voiceHint').textContent = 'The name is printed on the certificate exactly as it appears here. Please check the spelling.';
+  }
+
+  function renderSent() {
+    $('sentCount').textContent = String(sentLog.length);
+    $('sentList').innerHTML = sentLog.map(function(s) {
+      return '<div class="sent-row"><strong>' + escapeHtml(s.name) + '</strong><div class="to">' + escapeHtml(s.time) +
+        ' · emailed to ' + s.to + ' address' + (s.to === 1 ? '' : 'es') + '</div></div>';
+    }).join('');
+  }
+</script>
+</body>
+</html>

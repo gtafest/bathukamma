@@ -2,12 +2,13 @@
    Service Worker — caches app shell for offline use
    ============================================================ */
 
-const CACHE_NAME = 'volunteer-app-v49';
+const CACHE_NAME = 'volunteer-app-v50';
 const APP_SHELL = [
   './',
   './index.html',
   './admin.html',
   './checkin.html',
+  './cultural.html',
   './app.js',
   './chat-assistant.js',
   './ai-features.js',
@@ -16,6 +17,7 @@ const APP_SHELL = [
   './manifest.json',
   './icon.svg',
   './cert-template.png',
+  './cert-template-cultural.png',
   './gta-banner.png',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
 ];
